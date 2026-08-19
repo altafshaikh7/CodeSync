@@ -212,87 +212,82 @@ const Footer = () => {
     ]
 
     return (
-        <footer className='bg-slate-900 border-t border-slate-800'>
+        <footer className='relative overflow-hidden border-t border-slate-800/80 bg-[#0a0a0f]'>
+            {/* Background effects */}
+            <div className='pointer-events-none absolute inset-0'>
+                <div className='absolute top-0 left-1/2 -translate-x-1/2 h-px w-3/4 bg-gradient-to-r from-transparent via-blue-500/30 to-transparent'></div>
+                <div className='absolute -top-40 left-1/2 -translate-x-1/2 h-80 w-[600px] rounded-full bg-blue-500/[0.03] blur-[100px]'></div>
+            </div>
 
             {/* Newsletter */}
-            <div className='max-w-6xl mx-auto px-6 md:px-10 py-12'>
-                <div className='rounded-2xl bg-slate-800 border border-slate-700 overflow-hidden flex flex-col md:flex-row'>
+            <div className='relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8'>
+                <div className='overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/50 backdrop-blur-xl transition-all duration-500 hover:border-slate-600/80 hover:shadow-2xl hover:shadow-blue-500/10'>
+                    <div className='flex flex-col md:flex-row'>
+                        {/* Left Section */}
+                        <div className='relative hidden overflow-hidden md:block md:w-2/5'>
+                            <div className='absolute inset-0 bg-gradient-to-br from-blue-500/10 via-slate-900/50 to-purple-500/10'></div>
+                            
+                            {/* Decorative elements */}
+                            <div className='absolute -top-16 -left-16 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl'></div>
+                            <div className='absolute -bottom-16 -right-16 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl'></div>
+                            
+                            <div className='relative flex h-full items-center justify-center p-10'>
+                                <div className='text-center'>
+                                    <div className='group mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-500/10 transition-all duration-500 hover:scale-110 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/20'>
+                                        <i className='ri-code-s-slash-line text-4xl text-blue-400 transition-transform duration-500 group-hover:rotate-6'></i>
+                                    </div>
 
-                    {/* Left Section */}
-                    <div className='hidden md:block md:w-2/5 bg-gradient-to-br from-blue-900 via-slate-800 to-slate-900 relative overflow-hidden'>
+                                    <p className='mb-2 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-lg font-bold text-transparent'>
+                                        Build. Collaborate. Ship.
+                                    </p>
 
-                        <div className='absolute inset-0 flex items-center justify-center'>
-                            <div className='text-center px-8'>
-
-                                <div className='w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-600/30'>
-                                    <i className='ri-code-s-slash-line text-blue-400 text-3xl'></i>
+                                    <p className='text-sm text-slate-500'>
+                                        Collaborate and build amazing projects together
+                                    </p>
                                 </div>
-
-                                <p className='text-blue-300 text-sm font-medium'>
-                                    Build. Collaborate. Ship.
-                                </p>
-
-                                <p className='text-slate-500 text-xs mt-1'>
-                                    Collaborate and build amazing projects together
-                                </p>
-
                             </div>
                         </div>
 
-                        <div className='absolute -top-10 -left-10 w-40 h-40 rounded-full bg-blue-600/10'></div>
-                        <div className='absolute -bottom-10 -right-10 w-40 h-40 rounded-full bg-purple-600/10'></div>
-
+                        {/* Newsletter */}
+                        <div className='flex flex-1 flex-col justify-center p-8 md:p-12'>
+                            <Newsletter />
+                        </div>
                     </div>
-
-                    {/* Newsletter */}
-                    <div className='flex-1 p-8 md:p-10 flex flex-col justify-center'>
-                        <Newsletter />
-                    </div>
-
                 </div>
             </div>
 
             {/* Footer Links */}
-            <div className='max-w-6xl mx-auto px-5 sm:px-6 md:px-10 pb-10'>
-
-                <div className='grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8 pb-8 md:pb-10 border-b border-slate-800'>
-
+            <div className='relative mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8'>
+                <div className='grid grid-cols-2 gap-8 border-b border-slate-800/80 pb-10 md:grid-cols-5 md:gap-6 lg:gap-8'>
                     {/* Brand */}
-                    <div className='col-span-2 md:col-span-1 text-center md:text-left'>
-
-                        <div className='flex items-center justify-center md:justify-start gap-2 mb-4'>
-
-                            <div className='w-8 h-8 rounded-lg flex items-center justify-center'>
+                    <div className='col-span-2 text-center md:col-span-1 md:text-left'>
+                        <div className='mb-5 flex items-center justify-center gap-3 md:justify-start'>
+                            <div className='group flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 ring-1 ring-blue-500/30 transition-all duration-500 hover:scale-110 hover:ring-blue-500/60 hover:shadow-lg hover:shadow-blue-500/20'>
                                 <img
                                     src='/terminal_favicon.png'
-                                    alt='DevRoom logo'
-                                    className='w-full h-full object-contain'
+                                    alt='CodeSync logo'
+                                    className='h-7 w-7 object-contain transition-transform duration-500 group-hover:rotate-6'
                                 />
                             </div>
 
-                            <span className='font-bold bg-gradient-to-b from-[#ff7a00] to-[#ffd500] bg-clip-text text-transparent'>
-                                DevRoom
-                            </span>
-
+                            <div className='flex flex-col leading-tight'>
+                                <span className='bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-lg font-bold text-transparent'>
+                                    CodeSync
+                                </span>
+                                <span className='text-[10px] text-slate-500'>
+                                    Code together. Build together.
+                                </span>
+                            </div>
                         </div>
 
-                        <p className='text-xs text-slate-500 leading-relaxed mb-4'>
+                        <p className='mb-6 text-xs leading-relaxed text-slate-500'>
                             A collaborative coding platform where developers can
                             create projects, work together and build faster with
                             AI-powered assistance.
                         </p>
 
-                        {/* Developer */}
-                        <p className='text-xs text-slate-400 mb-4'>
-                            Developed by{' '}
-                            <span className='text-blue-400 font-medium'>
-                                Shaikh Altaf Anzar
-                            </span>
-                        </p>
-
                         {/* Social Links */}
-                        <div className='flex justify-center md:justify-start gap-3'>
-
+                        <div className='flex justify-center gap-3 md:justify-start'>
                             {socialLinks.map((social) => (
                                 <a
                                     key={social.label}
@@ -300,68 +295,70 @@ const Footer = () => {
                                     target='_blank'
                                     rel='noreferrer'
                                     aria-label={social.label}
-                                    className='w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-all duration-300 hover:scale-110'
+                                    className='group relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-slate-700/80 bg-slate-900/80 text-slate-400 transition-all duration-300 hover:scale-110 hover:border-blue-500/50 hover:text-white hover:shadow-lg hover:shadow-blue-500/20'
                                 >
-                                    <i className={`${social.icon} text-base`}></i>
+                                    <i className={`${social.icon} text-base transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6`}></i>
+                                    
+                                    {/* Shine effect */}
+                                    <div className='absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full'></div>
                                 </a>
                             ))}
-
                         </div>
-
                     </div>
 
                     {/* Footer Sections */}
                     {footerSections.map((section) => (
-
                         <div key={section.title}>
-
-                            <p className='text-xs text-slate-400 uppercase tracking-widest font-medium mb-4'>
+                            <p className='mb-5 text-xs font-semibold uppercase tracking-widest text-slate-400'>
                                 {section.title}
                             </p>
 
-                            <ul className='space-y-2 md:space-y-2.5'>
-
+                            <ul className='space-y-3'>
                                 {section.items.map((item) => (
-
                                     <li key={item.label}>
-
                                         <button
                                             onClick={item.action}
-                                            className='sm:text-sm text-xs text-slate-500 hover:text-white transition cursor-pointer'
+                                            className='group relative cursor-pointer text-sm text-slate-500 transition-all duration-300 hover:text-white'
                                         >
-                                            {item.label}
+                                            <span className='inline-block transition-transform duration-300 group-hover:translate-x-1'>
+                                                {item.label}
+                                            </span>
+                                            
+                                            {/* Animated underline */}
+                                            <span className='absolute -bottom-0.5 left-0 h-px w-0 bg-gradient-to-r from-blue-400 to-cyan-400 transition-all duration-300 group-hover:w-full'></span>
                                         </button>
-
                                     </li>
-
                                 ))}
-
                             </ul>
-
                         </div>
-
                     ))}
-
                 </div>
 
                 {/* Bottom */}
-                <div className='pt-6 flex flex-col md:flex-row items-center justify-center md:justify-between gap-3 text-center'>
+                <div className='flex flex-col items-center justify-center gap-3 pt-8 text-center md:flex-row md:justify-between'>
+                    <div className='flex items-center gap-2'>
+                        <i className='ri-code-s-slash-line text-blue-400'></i>
+                        <p className='text-xs text-slate-500'>
+                            © 2026 CodeSync. Built with ❤️ by{' '}
+                            <a
+                                href='https://shaikhaltaf.netlify.app'
+                                target='_blank'
+                                rel='noreferrer'
+                                className='font-medium text-slate-300 transition-all duration-300 hover:text-blue-400'
+                            >
+                                Shaikh Altaf Anzar
+                            </a>
+                        </p>
+                    </div>
 
-                    <p className='text-xs text-slate-500'>
-                        © 2026 DevRoom. All rights reserved.
-                    </p>
-
-                    <p className='text-xs text-slate-600'>
-                        Built with ❤️ by{' '}
-                        <span className='text-slate-300 font-medium'>
-                            Shaikh Altaf Anzar
+                    <div className='flex items-center gap-4'>
+                        <span className='inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-medium text-emerald-400'>
+                            <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400'></span>
+                            All systems operational
                         </span>
-                    </p>
-
+                    </div>
                 </div>
-
             </div>
-
         </footer>
     )
 }

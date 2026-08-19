@@ -1,11 +1,10 @@
 import { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FaEnvelope, FaLock, FaUser, FaKey } from 'react-icons/fa'
 import { UserContext } from '../context/user.context'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 
-const apiUrl = import.meta.env.VITE_API_URL
+const API_URL = 'http://localhost:5000'
 
 const Register = () => {
     const [name, setName] = useState('')
@@ -16,40 +15,51 @@ const Register = () => {
     const [step, setStep] = useState('register')
     const [resendCooldown, setResendCooldown] = useState(0)
     const [isLoading, setIsLoading] = useState(false)
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
     const { setUser } = useContext(UserContext)
     const navigate = useNavigate()
 
     function showApiError(err, fallback = 'Something went wrong') {
-        if (err.code === 'ERR_NETWORK' || !navigator.onLine) {
-            toast.error('Network error. Please check your internet connection.')
-            return
-        }
-
         const data = err.response?.data
+        console.log('Error:', data)
 
         if (data?.errors?.length) {
-            data.errors.forEach((er) => toast.error(er.msg))
+            data.errors.forEach((er) => toast.error(er.msg || er))
+        } else if (typeof data?.errors === 'string') {
+            toast.error(data.errors)
+        } else if (data?.message) {
+            toast.error(data.message)
         } else {
-            toast.error(data?.message || fallback)
+            toast.error(fallback)
         }
     }
 
     useEffect(() => {
         if (resendCooldown <= 0) return
-
         const timer = setInterval(() => {
             setResendCooldown((prev) => Math.max(prev - 1, 0))
         }, 1000)
-
         return () => clearInterval(timer)
     }, [resendCooldown])
 
     async function submitHandler(e) {
         e.preventDefault()
 
-        if (!name.trim()) {
-            toast.error('Please enter your name')
+        if (name.trim().length < 3) {
+            toast.error('Name must be at least 3 characters long')
+            return
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(email)) {
+            toast.error('Please enter a valid email address')
+            return
+        }
+
+        if (password.length < 6) {
+            toast.error('Password must be at least 6 characters long')
             return
         }
 
@@ -58,21 +68,25 @@ const Register = () => {
             return
         }
 
-        if (password.length < 6) {
-            toast.error('Password must be at least 6 characters')
-            return
-        }
-
         try {
             setIsLoading(true)
 
-            const res = await axios.post(`${apiUrl}/users/register`, {
-                email,
-                password,
-                name
+            const res = await axios.post(`${API_URL}/users/register`, {
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                password: password
             })
 
+            console.log('Response:', res.data)
+
             toast.success(res.data.message || 'OTP sent to your email')
+            
+            // Auto-fill OTP for testing
+            if (res.data.debugOtp) {
+                setOtp(res.data.debugOtp)
+                toast.info(`OTP: ${res.data.debugOtp}`)
+            }
+            
             setStep('otp')
             setResendCooldown(60)
         } catch (err) {
@@ -93,8 +107,8 @@ const Register = () => {
         try {
             setIsLoading(true)
 
-            const res = await axios.post(`${apiUrl}/users/verify-signup`, {
-                email,
+            const res = await axios.post(`${API_URL}/users/verify-signup`, {
+                email: email.toLowerCase().trim(),
                 otp
             })
 
@@ -102,7 +116,6 @@ const Register = () => {
 
             localStorage.setItem('token', res.data.token)
             setUser(res.data.user)
-
             navigate('/home')
         } catch (err) {
             showApiError(err, 'Invalid OTP')
@@ -117,13 +130,19 @@ const Register = () => {
         try {
             setIsLoading(true)
 
-            const res = await axios.post(`${apiUrl}/users/register`, {
-                email,
-                password,
-                name
+            const res = await axios.post(`${API_URL}/users/register`, {
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                password: password
             })
 
             toast.success(res.data.message || 'OTP resent to your email')
+            
+            if (res.data.debugOtp) {
+                setOtp(res.data.debugOtp)
+                toast.info(`OTP: ${res.data.debugOtp}`)
+            }
+            
             setResendCooldown(60)
         } catch (err) {
             showApiError(err, 'Failed to resend OTP')
@@ -133,252 +152,145 @@ const Register = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4 py-10">
-            <div className="w-full max-w-xl overflow-hidden rounded-[28px] border border-slate-800 bg-slate-900/95 shadow-[0_30px_80px_rgba(15,23,42,0.35)]">
-                <div className="bg-slate-900 px-8 py-10 sm:px-10">
+        <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0a0a0f] px-4 py-10">
+            <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+                <div className="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-blue-500/[0.05] blur-[120px]"></div>
+            </div>
 
-                    {step === 'register' && (
-                        <>
-                            <div className="mb-8">
-                                <div className="inline-block rounded-full bg-emerald-600/15 px-4 py-2 text-sm font-medium text-emerald-300">
-                                    New account
-                                </div>
+            <div className="relative w-full max-w-xl">
+                <div className="mb-8 text-center">
+                    <div className="group mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 ring-1 ring-blue-500/30 transition-all duration-500 hover:scale-110 hover:ring-blue-500/60 hover:shadow-xl hover:shadow-blue-500/20">
+                        <img src='/terminal_favicon.png' alt='CodeSync logo' className='h-10 w-10 object-contain transition-transform duration-500 group-hover:rotate-6' />
+                    </div>
+                    <h1 className="text-3xl font-bold text-white">Join CodeSync</h1>
+                    <p className="mt-2 text-sm text-slate-400">Create your account and start building together</p>
+                </div>
 
-                                <h1 className="mt-6 text-3xl font-semibold text-white">
-                                    Create your account
-                                </h1>
-
-                                <p className="mt-3 max-w-xl text-sm text-slate-400">
-                                    Create your DevRoom account and start building with your team and AI.
-                                </p>
-                            </div>
-
-                            <form onSubmit={submitHandler} className="space-y-5">
-
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                                        Name
-                                    </label>
-
-                                    <div className="relative rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 focus-within:border-slate-600 focus-within:ring-1 focus-within:ring-slate-600">
-                                        <FaUser className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-
-                                        <input
-                                            type="text"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            placeholder="Your name"
-                                            className="w-full bg-transparent pl-11 text-base text-slate-100 placeholder:text-slate-500 outline-none"
-                                            required
-                                        />
+                <div className="overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/80 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                    <div className="px-8 py-10 sm:px-10">
+                        {step === 'register' && (
+                            <>
+                                <div className="mb-8">
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-medium text-emerald-400">
+                                        <i className="ri-shield-check-line text-sm"></i>
+                                        New account
                                     </div>
+                                    <h2 className="mt-6 text-3xl font-bold text-white">Create your account</h2>
+                                    <p className="mt-3 text-sm text-slate-400">Join CodeSync and start building with your team and AI.</p>
                                 </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                                        Email
-                                    </label>
-
-                                    <div className="relative rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 focus-within:border-slate-600 focus-within:ring-1 focus-within:ring-slate-600">
-                                        <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-
-                                        <input
-                                            type="email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            placeholder="you@example.com"
-                                            className="w-full bg-transparent pl-11 text-base text-slate-100 placeholder:text-slate-500 outline-none"
-                                            required
-                                        />
+                                <form onSubmit={submitHandler} className="space-y-5">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-300">Name (min 3 characters)</label>
+                                        <div className="group relative rounded-2xl border border-slate-700/80 bg-slate-900/80 transition-all duration-300 focus-within:border-emerald-500/50 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                                            <i className="ri-user-line absolute left-4 top-1/2 -translate-y-1/2 text-lg text-slate-500 transition-colors duration-300 group-focus-within:text-emerald-400"></i>
+                                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" className="w-full bg-transparent py-3.5 pl-11 pr-4 text-base text-slate-100 placeholder:text-slate-500 outline-none" required />
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                                        Password
-                                    </label>
-
-                                    <div className="relative rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 focus-within:border-slate-600 focus-within:ring-1 focus-within:ring-slate-600">
-                                        <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-
-                                        <input
-                                            type="password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            placeholder="Create a password"
-                                            className="w-full bg-transparent pl-11 text-base text-slate-100 placeholder:text-slate-500 outline-none"
-                                            required
-                                        />
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-300">Email</label>
+                                        <div className="group relative rounded-2xl border border-slate-700/80 bg-slate-900/80 transition-all duration-300 focus-within:border-emerald-500/50 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                                            <i className="ri-mail-line absolute left-4 top-1/2 -translate-y-1/2 text-lg text-slate-500 transition-colors duration-300 group-focus-within:text-emerald-400"></i>
+                                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" className="w-full bg-transparent py-3.5 pl-11 pr-4 text-base text-slate-100 placeholder:text-slate-500 outline-none" required />
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                                        Confirm password
-                                    </label>
-
-                                    <div className="relative rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 focus-within:border-slate-600 focus-within:ring-1 focus-within:ring-slate-600">
-                                        <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-
-                                        <input
-                                            type="password"
-                                            value={confirmPassword}
-                                            onChange={(e) =>
-                                                setConfirmPassword(e.target.value)
-                                            }
-                                            placeholder="Repeat your password"
-                                            className="w-full bg-transparent pl-11 text-base text-slate-100 placeholder:text-slate-500 outline-none"
-                                            required
-                                        />
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-300">Password (min 6 characters)</label>
+                                        <div className="group relative rounded-2xl border border-slate-700/80 bg-slate-900/80 transition-all duration-300 focus-within:border-emerald-500/50 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                                            <i className="ri-lock-line absolute left-4 top-1/2 -translate-y-1/2 text-lg text-slate-500 transition-colors duration-300 group-focus-within:text-emerald-400"></i>
+                                            <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password123" className="w-full bg-transparent py-3.5 pl-11 pr-12 text-base text-slate-100 placeholder:text-slate-500 outline-none" required />
+                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors duration-300 hover:text-slate-300">
+                                                <i className={`text-lg ${showPassword ? 'ri-eye-off-line' : 'ri-eye-line'}`}></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="w-full rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    {isLoading ? 'Creating account...' : 'Create account'}
-                                </button>
-
-                                <div className="my-4 flex items-center gap-3">
-                                    <div className="h-px flex-1 bg-slate-700" />
-                                    <span className="text-xs text-slate-500">or</span>
-                                    <div className="h-px flex-1 bg-slate-700" />
-                                </div>
-
-                                <a
-                                    href={`${apiUrl}/auth/google`}
-                                    className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                                >
-                                    <svg width="18" height="18" viewBox="0 0 48 48">
-                                        <path
-                                            fill="#EA4335"
-                                            d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                                        />
-                                        <path
-                                            fill="#4285F4"
-                                            d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                                        />
-                                        <path
-                                            fill="#FBBC05"
-                                            d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                                        />
-                                        <path
-                                            fill="#34A853"
-                                            d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                                        />
-                                    </svg>
-
-                                    Continue with Google
-                                </a>
-                            </form>
-
-                            <div className="mt-6 flex items-center justify-between text-sm text-slate-500">
-                                <span>Already have an account?</span>
-
-                                <button
-                                    onClick={() => navigate('/login')}
-                                    className="font-medium text-slate-100 transition hover:text-white"
-                                >
-                                    Sign in
-                                </button>
-                            </div>
-                        </>
-                    )}
-
-                    {step === 'otp' && (
-                        <>
-                            <div className="mb-8">
-                                <div className="inline-block rounded-full bg-emerald-600/15 px-4 py-2 text-sm font-medium text-emerald-300">
-                                    Verify email
-                                </div>
-
-                                <h1 className="mt-6 text-3xl font-semibold text-white">
-                                    Enter OTP
-                                </h1>
-
-                                <p className="mt-3 max-w-xl text-sm text-slate-400">
-                                    We've sent a 6-digit code to{' '}
-                                    <span className="text-slate-200">{email}</span>.
-                                    Enter it below to verify your account.
-                                </p>
-                            </div>
-
-                            <form onSubmit={verifyOtpHandler} className="space-y-5">
-                                <div>
-                                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                                        OTP Code
-                                    </label>
-
-                                    <div className="relative rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 focus-within:border-slate-600 focus-within:ring-1 focus-within:ring-slate-600">
-                                        <FaKey className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={otp}
-                                            onChange={(e) =>
-                                                setOtp(
-                                                    e.target.value
-                                                        .replace(/\D/g, '')
-                                                        .slice(0, 6)
-                                                )
-                                            }
-                                            placeholder="123456"
-                                            maxLength={6}
-                                            className="w-full bg-transparent pl-11 text-base tracking-[6px] text-slate-100 placeholder:text-slate-500 outline-none"
-                                            required
-                                        />
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-300">Confirm password</label>
+                                        <div className="group relative rounded-2xl border border-slate-700/80 bg-slate-900/80 transition-all duration-300 focus-within:border-emerald-500/50 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                                            <i className="ri-lock-line absolute left-4 top-1/2 -translate-y-1/2 text-lg text-slate-500 transition-colors duration-300 group-focus-within:text-emerald-400"></i>
+                                            <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="password123" className="w-full bg-transparent py-3.5 pl-11 pr-12 text-base text-slate-100 placeholder:text-slate-500 outline-none" required />
+                                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors duration-300 hover:text-slate-300">
+                                                <i className={`text-lg ${showConfirmPassword ? 'ri-eye-off-line' : 'ri-eye-line'}`}></i>
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    <button type="submit" disabled={isLoading} className="group relative w-full overflow-hidden rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition-all duration-300 hover:scale-[1.02] hover:bg-blue-500 hover:shadow-xl hover:shadow-blue-500/35 disabled:cursor-not-allowed disabled:opacity-60">
+                                        <span className="relative z-10 inline-flex items-center gap-2">
+                                            {isLoading ? (
+                                                <>
+                                                    <i className="ri-loader-4-line animate-spin"></i>
+                                                    Creating account...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Create account
+                                                    <i className="ri-arrow-right-line transition-transform duration-300 group-hover:translate-x-1"></i>
+                                                </>
+                                            )}
+                                        </span>
+                                    </button>
+                                </form>
+
+                                <div className="mt-8 flex items-center justify-center gap-2 text-sm text-slate-500">
+                                    <span>Already have an account?</span>
+                                    <button onClick={() => navigate('/login')} className="font-medium text-blue-400 transition-all duration-300 hover:text-blue-300 cursor-pointer">Sign in</button>
+                                </div>
+                            </>
+                        )}
+
+                        {step === 'otp' && (
+                            <>
+                                <div className="mb-8">
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-medium text-emerald-400">
+                                        <i className="ri-shield-check-line text-sm"></i>
+                                        Verify email
+                                    </div>
+                                    <h2 className="mt-6 text-3xl font-bold text-white">Enter OTP</h2>
+                                    <p className="mt-3 text-sm text-slate-400">
+                                        We've sent a 6-digit code to <span className="font-semibold text-white">{email}</span>
+                                    </p>
                                 </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="w-full rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    {isLoading
-                                        ? 'Verifying...'
-                                        : 'Verify & Continue'}
-                                </button>
-                            </form>
+                                <form onSubmit={verifyOtpHandler} className="space-y-5">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-300">OTP Code</label>
+                                        <div className="group relative rounded-2xl border border-slate-700/80 bg-slate-900/80 transition-all duration-300 focus-within:border-emerald-500/50 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                                            <i className="ri-key-2-line absolute left-4 top-1/2 -translate-y-1/2 text-lg text-slate-500 transition-colors duration-300 group-focus-within:text-emerald-400"></i>
+                                            <input type="text" inputMode="numeric" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" maxLength={6} className="w-full bg-transparent py-3.5 pl-11 pr-4 text-center text-2xl font-bold tracking-[12px] text-slate-100 placeholder:text-slate-600 outline-none" required />
+                                        </div>
+                                    </div>
 
-                            <div className="mt-6 flex items-center justify-between text-sm text-slate-500">
-                                <span>Didn't get the code?</span>
+                                    <button type="submit" disabled={isLoading || otp.length !== 6} className="group relative w-full overflow-hidden rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition-all duration-300 hover:scale-[1.02] hover:bg-blue-500 hover:shadow-xl hover:shadow-blue-500/35 disabled:cursor-not-allowed disabled:opacity-60">
+                                        <span className="relative z-10 inline-flex items-center gap-2">
+                                            {isLoading ? (
+                                                <>
+                                                    <i className="ri-loader-4-line animate-spin"></i>
+                                                    Verifying...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Verify & Continue
+                                                    <i className="ri-arrow-right-line transition-transform duration-300 group-hover:translate-x-1"></i>
+                                                </>
+                                            )}
+                                        </span>
+                                    </button>
+                                </form>
 
-                                <button
-                                    type="button"
-                                    onClick={resendOtpHandler}
-                                    disabled={
-                                        resendCooldown > 0 || isLoading
-                                    }
-                                    className={`font-medium transition ${
-                                        resendCooldown > 0 || isLoading
-                                            ? 'cursor-not-allowed text-slate-600'
-                                            : 'text-slate-100 hover:text-white'
-                                    }`}
-                                >
-                                    {resendCooldown > 0
-                                        ? `Resend in ${resendCooldown}s`
-                                        : 'Resend OTP'}
-                                </button>
-                            </div>
-
-                            <div className="mt-3 text-center">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setOtp('')
-                                        setStep('register')
-                                    }}
-                                    className="text-sm font-medium text-slate-500 transition hover:text-slate-300"
-                                >
-                                    Go back
-                                </button>
-                            </div>
-                        </>
-                    )}
+                                <div className="mt-6 flex items-center justify-between text-sm text-slate-500">
+                                    <span>Didn't get the code?</span>
+                                    <button type="button" onClick={resendOtpHandler} disabled={resendCooldown > 0 || isLoading} className={`font-medium transition-all duration-300 ${resendCooldown > 0 || isLoading ? 'cursor-not-allowed text-slate-600' : 'text-emerald-400 hover:text-emerald-300'}`}>
+                                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
