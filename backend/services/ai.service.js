@@ -1,353 +1,93 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-
-// ============================================================
-// CONFIGURATION
-// ============================================================
-
 const API_KEY = process.env.GOOGLE_AI_KEY;
 
 if (!API_KEY) {
-    throw new Error("GOOGLE_AI_KEY is missing from environment variables");
+    console.error('❌ GOOGLE_AI_KEY is missing');
+    throw new Error("GOOGLE_AI_KEY is missing");
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-
-// Primary model = better for code generation
-// Fallback model = lightweight + structured JSON friendly
+// ✅ All available models - try in order
 const MODEL_NAMES = [
-    "gemini-flash-latest",
-    "gemini-3.5-flash-lite"
+    "gemini-1.5-flash",    // Fast, reliable
+    "gemini-1.5-pro",      // More capable  
+    "gemini-pro"           // Legacy fallback
 ];
-
 
 // ============================================================
 // SYSTEM INSTRUCTION
 // ============================================================
 
 const SYSTEM_INSTRUCTION = `
-You are CodeSync AI, an expert MERN stack developer with 10+ years
-of professional software engineering experience.
+You are CodeSync AI, an expert MERN stack developer.
 
-You build production-quality applications using:
-
-- React
-- Vite
-- Node.js
-- Express.js
-- MongoDB
-- Mongoose
-- JavaScript
-- TypeScript
-- REST APIs
-- Authentication
-- JWT
-- WebSockets
-- Socket.IO
-- Tailwind CSS
-
-You write:
-
-- modular code
-- scalable architecture
-- secure code
-- maintainable code
-- reusable components
-- clean APIs
-- proper error handling
-- production-ready implementations
-
-
-============================================================
-RESPONSE FORMAT
-============================================================
-
-ALWAYS return ONE valid JSON object.
-
-The JSON structure MUST be:
-
+Always return ONE valid JSON object with this structure:
 {
     "text": "Explain what was created",
     "fileTree": {},
-    "buildCommand": {
-        "mainItem": "npm",
-        "commands": ["install"]
-    },
-    "startCommand": {
-        "mainItem": "npm",
-        "commands": ["start"]
-    }
+    "buildCommand": { "mainItem": "npm", "commands": ["install"] },
+    "startCommand": { "mainItem": "npm", "commands": ["start"] }
 }
 
-
-============================================================
-FILE TREE RULES
-============================================================
-
-Every file MUST use:
-
-{
-    "filename.ext": {
-        "file": {
-            "contents": "file content"
-        }
-    }
-}
-
-
-Example:
-
-{
-    "src": {
-        "App.jsx": {
-            "file": {
-                "contents": "export default function App() {}"
-            }
-        }
-    }
-}
-
-
-Folders are plain objects.
-
-Files MUST contain:
-
-{
-    "file": {
-        "contents": "..."
-    }
-}
-
-
-NEVER use this:
-
-{
-    "src/App.jsx": {
-        "file": {
-            "contents": "..."
-        }
-    }
-}
-
-
-Instead use:
-
-{
-    "src": {
-        "App.jsx": {
-            "file": {
-                "contents": "..."
-            }
-        }
-    }
-}
-
-
-============================================================
-PACKAGE.JSON RULES
-============================================================
-
-ALWAYS include package.json for generated applications.
-
-package.json MUST:
-
-1. Contain all required dependencies.
-2. Contain all packages imported by the source code.
-3. Contain a valid start script.
-4. Contain valid JSON.
-5. Use compatible package versions.
-
-
-For Vite:
-
-"scripts": {
-    "dev": "vite",
-    "start": "vite",
-    "build": "vite build"
-}
-
-
-For Express:
-
-"scripts": {
-    "start": "node server.js"
-}
-
-
-For Node:
-
-"scripts": {
-    "start": "node index.js"
-}
-
-
-============================================================
-REACT RULES
-============================================================
-
-For React + Vite applications:
-
-- Use React components.
-- Use proper imports.
-- Use Vite.
-- Include package.json.
-- Include index.html.
-- Include src/main.jsx.
-- Include src/App.jsx.
-- Include CSS when required.
-- Ensure all imports point to existing files.
-
-
-============================================================
-MERN RULES
-============================================================
-
-For MERN applications:
-
-Frontend:
-
-React + Vite
-
-Backend:
-
-Node.js + Express
-
-Database:
-
-MongoDB + Mongoose
-
-
-Use a clean structure such as:
-
-client/
-server/
-
-or:
-
-frontend/
-backend/
-
-
-Do not invent dependencies that are not required.
-
-
-============================================================
-ERROR HANDLING
-============================================================
-
-Generated applications should handle:
-
-- invalid input
-- missing parameters
-- database errors
-- API errors
-- authentication errors
-- network errors
-
-Do not expose secrets in frontend code.
-
-
-============================================================
-SECURITY
-============================================================
-
-NEVER hardcode:
-
-- API keys
-- passwords
-- JWT secrets
-- database passwords
-- OAuth secrets
-
-Use environment variables.
-
-
-============================================================
-CODE QUALITY
-============================================================
-
-Write complete working code.
-
-Do not generate:
-
-- TODO placeholders
-- "implement later"
-- empty functions
-- undefined variables
-- fake imports
-- missing dependencies
-- broken paths
-
-
-============================================================
-SIMPLE REQUESTS
-============================================================
-
-If the user asks a normal question instead of requesting an application,
-return:
-
-{
-    "text": "Your helpful answer",
-    "fileTree": {}
-}
-
-
-============================================================
-FINAL REQUIREMENT
-============================================================
-
-Return ONLY valid JSON.
-
-Do not wrap the JSON in markdown.
-
-Do not add explanations outside the JSON.
+File Tree Rules:
+- Every file MUST use: "filename.ext": { "file": { "contents": "file content" } }
+- Folders are plain objects
+- ALWAYS include package.json for generated apps
+
+For React + Vite apps:
+- Use React components with proper imports
+- Include package.json, index.html, src/main.jsx, src/App.jsx
+- In package.json, set "start": "vite"
+- Include dependencies: react, react-dom, vite, @vitejs/plugin-react
+
+For Node/Express apps:
+- Include package.json with "start": "node server.js"
+- Include server.js with proper Express setup
+
+Return ONLY valid JSON. No markdown, no explanations outside JSON.
 `;
-
 
 // ============================================================
 // MODEL CREATION
 // ============================================================
 
 function createModel(modelName) {
-    return genAI.getGenerativeModel({
-        model: modelName,
-
-        systemInstruction: SYSTEM_INSTRUCTION,
-
-        generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.4
-        }
-    });
+    try {
+        return genAI.getGenerativeModel({
+            model: modelName,
+            systemInstruction: SYSTEM_INSTRUCTION,
+            generationConfig: {
+                responseMimeType: "application/json",
+                temperature: 0.4,
+                topP: 0.95,
+                topK: 40,
+                maxOutputTokens: 4096,
+            }
+        });
+    } catch (error) {
+        console.error(`❌ Failed to create model ${modelName}:`, error.message);
+        return null;
+    }
 }
-
 
 // ============================================================
 // SAFE JSON PARSER
 // ============================================================
 
 function safeJsonParse(text) {
-
     if (!text || typeof text !== "string") {
         throw new Error("AI returned an empty response");
     }
 
-
-    // --------------------------------------------------------
-    // Attempt 1: Direct JSON parse
-    // --------------------------------------------------------
+    console.log('📄 Raw AI response length:', text.length);
 
     try {
         return JSON.parse(text);
-    } catch {
-        // Continue to fallback parser
+    } catch (e) {
+        console.log('Direct JSON parse failed');
     }
-
-
-    // --------------------------------------------------------
-    // Remove markdown code fences
-    // --------------------------------------------------------
 
     const cleaned = text
         .replace(/^```json\s*/i, "")
@@ -355,575 +95,367 @@ function safeJsonParse(text) {
         .replace(/\s*```$/i, "")
         .trim();
 
-
     try {
         return JSON.parse(cleaned);
-    } catch {
-        // Continue
+    } catch (e) {
+        console.log('Cleaned JSON parse failed');
     }
-
-
-    // --------------------------------------------------------
-    // Find first JSON object
-    // --------------------------------------------------------
 
     const start = cleaned.indexOf("{");
-
     if (start === -1) {
+        if (cleaned.length < 500) {
+            return { text: cleaned, fileTree: {} };
+        }
         throw new Error("AI response does not contain valid JSON");
     }
-
 
     let depth = 0;
     let inString = false;
     let escapeNext = false;
 
-
     for (let i = start; i < cleaned.length; i++) {
-
         const char = cleaned[i];
-
 
         if (escapeNext) {
             escapeNext = false;
             continue;
         }
 
-
         if (char === "\\") {
             escapeNext = true;
             continue;
         }
-
 
         if (char === '"') {
             inString = !inString;
             continue;
         }
 
+        if (inString) continue;
 
-        if (inString) {
-            continue;
-        }
-
-
-        if (char === "{") {
-            depth++;
-        }
-
-
+        if (char === "{") depth++;
         if (char === "}") {
-
             depth--;
-
-
             if (depth === 0) {
-
                 const jsonString = cleaned.slice(start, i + 1);
-
                 try {
                     return JSON.parse(jsonString);
                 } catch (error) {
-                    throw new Error(
-                        `AI returned malformed JSON: ${error.message}`
-                    );
+                    throw new Error(`Malformed JSON: ${error.message}`);
                 }
             }
         }
     }
 
-
-    throw new Error("AI response contains incomplete JSON");
+    throw new Error("Incomplete JSON response");
 }
-
-
-// ============================================================
-// FIND PACKAGE.JSON
-// ============================================================
-
-function findPackageJson(tree) {
-
-    if (!tree || typeof tree !== "object") {
-        return null;
-    }
-
-
-    for (const [key, value] of Object.entries(tree)) {
-
-        if (
-            key === "package.json" &&
-            value &&
-            value.file &&
-            typeof value.file.contents === "string"
-        ) {
-            return value;
-        }
-
-
-        if (
-            value &&
-            typeof value === "object" &&
-            !value.file
-        ) {
-
-            const result = findPackageJson(value);
-
-            if (result) {
-                return result;
-            }
-        }
-    }
-
-
-    return null;
-}
-
-
-// ============================================================
-// FIND ENTRY FILE
-// ============================================================
-
-function findEntryFile(tree) {
-
-    if (!tree || typeof tree !== "object") {
-        return "server.js";
-    }
-
-
-    const candidates = [
-        "server.js",
-        "index.js",
-        "app.js"
-    ];
-
-
-    for (const fileName of candidates) {
-
-        if (
-            tree[fileName] &&
-            tree[fileName].file &&
-            tree[fileName].file.contents
-        ) {
-            return fileName;
-        }
-    }
-
-
-    return "server.js";
-}
-
-
-// ============================================================
-// ENSURE PACKAGE.JSON START SCRIPT
-// ============================================================
-
-function ensureStartScript(fileTree) {
-
-    if (!fileTree || typeof fileTree !== "object") {
-        return fileTree;
-    }
-
-
-    const packageNode = findPackageJson(fileTree);
-
-
-    if (!packageNode) {
-        return fileTree;
-    }
-
-
-    let packageJson;
-
-
-    try {
-
-        packageJson = JSON.parse(
-            packageNode.file.contents
-        );
-
-    } catch {
-
-        packageJson = {
-            name: "codesync-generated-app",
-            version: "1.0.0"
-        };
-    }
-
-
-    if (!packageJson.scripts) {
-        packageJson.scripts = {};
-    }
-
-
-    if (!packageJson.scripts.start) {
-
-        const dependencies = {
-            ...(packageJson.dependencies || {}),
-            ...(packageJson.devDependencies || {})
-        };
-
-
-        if (dependencies["vite"]) {
-
-            packageJson.scripts.start = "vite";
-
-        } else if (dependencies["react-scripts"]) {
-
-            packageJson.scripts.start =
-                "react-scripts start";
-
-        } else {
-
-            packageJson.scripts.start =
-                `node ${findEntryFile(fileTree)}`;
-        }
-    }
-
-
-    packageNode.file.contents =
-        JSON.stringify(packageJson, null, 2);
-
-
-    return fileTree;
-}
-
 
 // ============================================================
 // VALIDATE FILE TREE
 // ============================================================
 
 function validateFileTree(tree) {
-
     if (!tree || typeof tree !== "object") {
+        console.error('Invalid tree: not an object');
         return false;
     }
 
+    if (Array.isArray(tree)) {
+        console.error('Invalid tree: is an array');
+        return false;
+    }
 
-    function walk(node) {
+    let hasValidFile = false;
 
-        if (!node || typeof node !== "object") {
-            return false;
-        }
-
+    function walk(node, path = '') {
+        if (!node || typeof node !== "object") return false;
 
         for (const [key, value] of Object.entries(node)) {
-
-            // File
+            const currentPath = path ? `${path}/${key}` : key;
+            
             if (value?.file) {
-
-                if (
-                    typeof value.file.contents !== "string" ||
-                    value.file.contents.trim() === ""
-                ) {
+                if (typeof value.file.contents !== "string") {
+                    console.error(`❌ File ${currentPath} has invalid contents`);
                     return false;
                 }
-
+                if (value.file.contents.trim() === "") {
+                    console.warn(`⚠️ File ${currentPath} is empty`);
+                }
+                hasValidFile = true;
                 continue;
             }
 
-
-            // Folder
-            if (!walk(value)) {
-                return false;
+            if (value && typeof value === "object") {
+                if (!walk(value, currentPath)) {
+                    return false;
+                }
             }
         }
-
-
         return true;
     }
 
-
-    return walk(tree);
+    const result = walk(tree);
+    if (!result) return false;
+    if (!hasValidFile) {
+        console.warn('⚠️ File tree has no files with content');
+    }
+    return true;
 }
 
+// ============================================================
+// FIND PACKAGE.JSON
+// ============================================================
+
+function findPackageJson(tree) {
+    if (!tree || typeof tree !== "object") return null;
+
+    for (const [key, value] of Object.entries(tree)) {
+        if (key === "package.json" && value && value.file && typeof value.file.contents === "string") {
+            return value;
+        }
+        if (value && typeof value === "object" && !value.file) {
+            const result = findPackageJson(value);
+            if (result) return result;
+        }
+    }
+    return null;
+}
 
 // ============================================================
-// NORMALIZE AI RESPONSE
+// FIND ENTRY FILE
+// ============================================================
+
+function findEntryFile(tree) {
+    if (!tree || typeof tree !== "object") return "server.js";
+
+    const candidates = ["server.js", "index.js", "app.js", "main.jsx", "App.jsx"];
+    for (const name of candidates) {
+        if (tree[name] && tree[name].file) return name;
+        if (tree.src && tree.src[name] && tree.src[name].file) return `src/${name}`;
+    }
+    return "server.js";
+}
+
+// ============================================================
+// ENSURE START SCRIPT
+// ============================================================
+
+function ensureStartScript(fileTree) {
+    if (!fileTree || typeof fileTree !== "object") return fileTree;
+
+    const packageNode = findPackageJson(fileTree);
+    if (!packageNode) {
+        const defaultPackage = {
+            name: "codesync-generated-app",
+            version: "1.0.0",
+            scripts: { start: "node server.js" }
+        };
+        fileTree["package.json"] = {
+            file: { contents: JSON.stringify(defaultPackage, null, 2) }
+        };
+        console.log('📦 Created default package.json');
+        return fileTree;
+    }
+
+    let packageJson;
+    try {
+        packageJson = JSON.parse(packageNode.file.contents);
+    } catch (e) {
+        console.error('❌ Invalid package.json, recreating...');
+        packageJson = {
+            name: "codesync-generated-app",
+            version: "1.0.0",
+            scripts: {}
+        };
+    }
+
+    if (!packageJson.scripts) packageJson.scripts = {};
+    
+    if (!packageJson.scripts.start) {
+        const deps = { ...(packageJson.dependencies || {}), ...(packageJson.devDependencies || {}) };
+        if (deps.vite) {
+            packageJson.scripts.start = "vite";
+        } else if (deps["react-scripts"]) {
+            packageJson.scripts.start = "react-scripts start";
+        } else {
+            const entry = findEntryFile(fileTree);
+            packageJson.scripts.start = `node ${entry}`;
+        }
+        console.log(`📦 Added start script: ${packageJson.scripts.start}`);
+    }
+
+    if (!packageJson.scripts.dev && packageJson.dependencies?.vite) {
+        packageJson.scripts.dev = "vite";
+    }
+
+    packageNode.file.contents = JSON.stringify(packageJson, null, 2);
+    return fileTree;
+}
+
+// ============================================================
+// NORMALIZE RESPONSE
 // ============================================================
 
 function normalizeResponse(parsed) {
-
     if (!parsed || typeof parsed !== "object") {
         throw new Error("Invalid AI response");
     }
-
 
     if (typeof parsed.text !== "string") {
         parsed.text = "Code generated successfully.";
     }
 
-
     if (!parsed.fileTree) {
         parsed.fileTree = {};
     }
 
-
-    if (
-        typeof parsed.fileTree !== "object" ||
-        Array.isArray(parsed.fileTree)
-    ) {
-        throw new Error("AI returned an invalid fileTree");
+    if (typeof parsed.fileTree !== "object" || Array.isArray(parsed.fileTree)) {
+        throw new Error("Invalid fileTree structure");
     }
-
 
     if (!parsed.buildCommand) {
-
-        parsed.buildCommand = {
-            mainItem: "npm",
-            commands: ["install"]
-        };
+        parsed.buildCommand = { mainItem: "npm", commands: ["install"] };
     }
-
 
     if (!parsed.startCommand) {
-
-        parsed.startCommand = {
-            mainItem: "npm",
-            commands: ["start"]
-        };
+        parsed.startCommand = { mainItem: "npm", commands: ["start"] };
     }
-
 
     if (parsed.fileTree && Object.keys(parsed.fileTree).length > 0) {
-
         if (!validateFileTree(parsed.fileTree)) {
-            throw new Error("AI generated an invalid file tree");
+            console.warn('⚠️ File tree validation failed, but continuing...');
         }
-
-
-        parsed.fileTree =
-            ensureStartScript(parsed.fileTree);
+        parsed.fileTree = ensureStartScript(parsed.fileTree);
     }
-
 
     return parsed;
 }
 
-
 // ============================================================
-// DETECT RETRYABLE ERRORS
+// RETRY LOGIC
 // ============================================================
 
 function isRetryableError(error) {
-
-    const message =
-        error?.message?.toLowerCase() || "";
-
-
+    const message = error?.message?.toLowerCase() || "";
     return (
         message.includes("503") ||
-        message.includes("service unavailable") ||
         message.includes("429") ||
-        message.includes("too many requests") ||
-        message.includes("rate limit") ||
         message.includes("quota") ||
-        message.includes("temporarily unavailable") ||
-        message.includes("overloaded") ||
-        message.includes("deadline exceeded")
+        message.includes("rate limit") ||
+        message.includes("timeout") ||
+        message.includes("500") ||
+        message.includes("unavailable") ||
+        message.includes("overloaded")
     );
 }
 
-
-// ============================================================
-// DELAY
-// ============================================================
-
 function sleep(ms) {
-
-    return new Promise(resolve => {
-        setTimeout(resolve, ms);
-    });
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
-
 
 // ============================================================
 // GENERATE RESULT
 // ============================================================
 
 export const generateResult = async (prompt) => {
-
-    // --------------------------------------------------------
-    // Validate prompt
-    // --------------------------------------------------------
-
-    if (
-        typeof prompt !== "string" ||
-        prompt.trim().length === 0
-    ) {
+    if (typeof prompt !== "string" || prompt.trim().length === 0) {
         throw new Error("Prompt is required");
     }
 
-
     if (prompt.length > 20000) {
-        throw new Error(
-            "Prompt is too long. Maximum allowed length is 20,000 characters."
-        );
+        throw new Error("Prompt is too long. Maximum 20,000 characters.");
     }
 
+    console.log('🤖 CodeSync AI: Starting generation...');
+    console.log(`📝 Prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
 
-    // --------------------------------------------------------
-    // Configuration
-    // --------------------------------------------------------
-
-    const maxRetries = 3;
-
+    const maxRetries = 2;
     const baseDelay = 2000;
-
-
     let lastError = null;
 
-
-    // --------------------------------------------------------
-    // Try each model
-    // --------------------------------------------------------
-
     for (const modelName of MODEL_NAMES) {
-
+        console.log(`🔄 Trying model: ${modelName}`);
         const model = createModel(modelName);
-
+        if (!model) {
+            console.warn(`⚠️ Could not create model: ${modelName}`);
+            continue;
+        }
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
-
             try {
-
-                console.log(
-                    `CodeSync AI → ${modelName} | attempt ${attempt + 1}/${maxRetries}`
-                );
-
-
-                const result =
-                    await model.generateContent(prompt);
-
-
-                const response =
-                    result.response;
-
-
-                const text =
-                    response.text();
-
+                console.log(`📡 Attempt ${attempt + 1}/${maxRetries} with ${modelName}`);
+                
+                const result = await model.generateContent(prompt);
+                const response = result.response;
+                const text = response.text();
 
                 if (!text) {
-                    throw new Error(
-                        "Gemini returned an empty response"
-                    );
+                    throw new Error("Empty response from Gemini");
                 }
 
+                console.log('📄 Parsing JSON response...');
+                const parsed = safeJsonParse(text);
+                console.log('✅ JSON parsed successfully');
 
-                const parsed =
-                    safeJsonParse(text);
-
-
-                const normalized =
-                    normalizeResponse(parsed);
-
-
-                console.log(
-                    `CodeSync AI → Success using ${modelName}`
-                );
-
-
+                const normalized = normalizeResponse(parsed);
+                console.log(`✅ CodeSync AI → Success using ${modelName}`);
+                
                 return normalized;
 
-
             } catch (error) {
-
                 lastError = error;
+                console.error(`❌ CodeSync AI error [${modelName}] attempt ${attempt + 1}:`, error.message);
+                
+                if (error.message?.includes('API key')) {
+                    throw new Error('Invalid or missing Google AI API key. Please check your environment variables.');
+                }
 
+                if (error.message?.includes('permission') || error.message?.includes('enabled')) {
+                    throw new Error('Gemini API is not enabled. Please enable it at: https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com');
+                }
 
-                console.error(
-                    `CodeSync AI error [${modelName}] attempt ${attempt + 1}:`,
-                    error.message
-                );
-
-
-                // ------------------------------------------------
-                // Don't retry permanent errors
-                // ------------------------------------------------
-
-                if (!isRetryableError(error)) {
-
+                if (error.message?.includes('model') || error.message?.includes('not found') || error.message?.includes('available')) {
+                    console.log(`⛔ Model ${modelName} not available, trying next...`);
                     break;
                 }
 
-
-                // ------------------------------------------------
-                // Retry with exponential backoff
-                // ------------------------------------------------
+                if (!isRetryableError(error)) {
+                    console.log('⛔ Non-retryable error, moving to next model');
+                    break;
+                }
 
                 if (attempt < maxRetries - 1) {
-
-                    const delay =
-                        baseDelay * Math.pow(2, attempt);
-
-
-                    console.log(
-                        `Retrying in ${delay / 1000}s...`
-                    );
-
-
+                    const delay = baseDelay * Math.pow(2, attempt);
+                    console.log(`⏳ Retrying in ${delay / 1000}s...`);
                     await sleep(delay);
                 }
             }
         }
-
-
-        console.warn(
-            `CodeSync AI → ${modelName} unavailable. Trying fallback model...`
-        );
     }
-
-
-    // ========================================================
-    // FINAL ERROR
-    // ========================================================
 
     if (lastError) {
+        const message = lastError.message || "Unknown error";
 
-        const message =
-            lastError.message || "Unknown Gemini API error";
-
-
-        if (
-            message.includes("API key") ||
-            message.includes("API_KEY")
-        ) {
-
-            throw new Error(
-                "Google AI API key is invalid or missing."
-            );
+        if (message.includes("API key") || message.includes("API_KEY")) {
+            throw new Error("Google AI API key is invalid or missing. Please check your .env file.");
         }
 
-
-        if (
-            message.includes("quota") ||
-            message.includes("429")
-        ) {
-
-            throw new Error(
-                "Google AI quota/rate limit reached. Please try again later."
-            );
+        if (message.includes("permission") || message.includes("enabled")) {
+            throw new Error("Gemini API is not enabled. Please enable it at: https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com");
         }
 
-
-        if (
-            message.includes("503") ||
-            message.includes("Service Unavailable")
-        ) {
-
-            throw new Error(
-                "Google Gemini is temporarily unavailable. Please try again shortly."
-            );
+        if (message.includes("model") || message.includes("not found") || message.includes("available")) {
+            throw new Error(`Gemini model not available. Please check your API key and model permissions. Error: ${message}`);
         }
 
+        if (message.includes("quota") || message.includes("429")) {
+            throw new Error("Google AI quota/rate limit reached. Please try again later.");
+        }
 
-        throw new Error(
-            `CodeSync AI failed: ${message}`
-        );
+        throw new Error(`CodeSync AI failed: ${message}`);
     }
 
-
-    throw new Error(
-        "CodeSync AI failed to generate a response."
-    );
+    throw new Error("CodeSync AI failed to generate a response. Please try again.");
 };
+
+export default { generateResult };

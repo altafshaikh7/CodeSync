@@ -9,7 +9,7 @@ import { getWebContainer } from '../config/webContainer.js';
 import 'highlight.js/styles/nord.css';
 import { toast } from 'react-toastify';
 
-// FIX: Complete fix for jsx warning - filter out non-standard props
+// ─── FIX: Safe code block with filtered props ──────────────────────────────
 const CodeBlock = ({ className, children, ...props }) => {
     const ref = useRef(null);
     
@@ -19,22 +19,24 @@ const CodeBlock = ({ className, children, ...props }) => {
             ref.current.removeAttribute('data-highlighted');
         }
     }, [className, children]);
+
+    // Remove ALL non-standard props before passing to DOM
+    // Specifically filter out 'jsx' and other custom props
+    const safeProps = {};
+    const allowedProps = ['id', 'style', 'title', 'dir', 'lang', 'tabIndex', 'role'];
     
-    // Remove jsx and other non-standard props
-    const { jsx, inline, node, sourcePosition, parentNode, ...safeProps } = props;
+    // Only copy allowed props
+    Object.keys(props).forEach(key => {
+        if (allowedProps.includes(key)) {
+            safeProps[key] = props[key];
+        }
+    });
     
-    return (
-        <code 
-            className={className} 
-            ref={ref} 
-            {...safeProps}
-        >
-            {children}
-        </code>
-    );
+    // className already passed separately, don't duplicate
+    return <code className={className} ref={ref} {...safeProps}>{children}</code>;
 };
 
-// ── File Tree Node ──
+// ─── File Tree Node ──────────────────────────────────────────────────────────
 const FileTreeNode = React.memo(({ 
     name, node, depth, currentFile, onFileClick, openFolders, 
     toggleFolder, onAddFile, onAddFolder, onDelete, path 
@@ -131,11 +133,13 @@ const FileTreeNode = React.memo(({
     );
 });
 
+// ─── Main Project Component ──────────────────────────────────────────────────
 const Project = () => {
     const location = useLocation();
     const initialProject = location.state?.project || {};
     const projectId = initialProject._id;
 
+    // ── State ──
     const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState(new Set());
@@ -174,31 +178,25 @@ const Project = () => {
     const [newItemName, setNewItemName] = useState('');
     const newItemInputRef = useRef(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+    const [generationAbortController, setGenerationAbortController] = useState(null);
+    const [isExecuting, setIsExecuting] = useState(false);
 
-    // Hide navbar on mount
+    // ── Effects ──
     useEffect(() => {
         const navbar = document.querySelector('nav') || document.querySelector('.navbar') || document.querySelector('header');
-        if (navbar) {
-            navbar.style.display = 'none';
-        }
+        if (navbar) navbar.style.display = 'none';
         return () => {
-            const navbar = document.querySelector('nav') || document.querySelector('.navbar') || document.querySelector('header');
-            if (navbar) {
-                navbar.style.display = '';
-            }
+            const nav = document.querySelector('nav') || document.querySelector('.navbar') || document.querySelector('header');
+            if (nav) nav.style.display = '';
         };
     }, []);
 
-    // Responsive handler
     useEffect(() => {
         const handleResize = () => {
             const width = window.innerWidth;
             setIsMobile(width < 768);
-            if (width < 768) {
-                setExplorerOpen(false);
-            } else {
-                setExplorerOpen(true);
-            }
+            setExplorerOpen(width >= 768);
         };
         window.addEventListener('resize', handleResize);
         handleResize();
@@ -209,6 +207,7 @@ const Project = () => {
         if (newItemDialog && newItemInputRef.current) newItemInputRef.current.focus();
     }, [newItemDialog]);
 
+    // ── Utility functions ──
     const addLog = useCallback((text, type = 'log') => {
         setTerminalLogs(prev => [...prev, { text, type, time: new Date().toLocaleTimeString() }]);
     }, []);
@@ -223,6 +222,7 @@ const Project = () => {
         if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }, [terminalLogs]);
 
+    // ── File tree helpers ──
     const toggleFolder = useCallback((path) => {
         setOpenFolders(prev => {
             const next = new Set(prev);
@@ -268,6 +268,7 @@ const Project = () => {
         return result;
     }, []);
 
+    // ── File / folder operations ──
     const handleAddFile = useCallback((parentPath) => {
         setNewItemDialog({ type: 'file', parentPath });
         setNewItemName('');
@@ -292,7 +293,6 @@ const Project = () => {
         if (!newItemName.trim()) return;
         const name = newItemName.trim();
         let newTree;
-
         if (newItemDialog.parentPath === null) {
             if (newItemDialog.type === 'file') {
                 newTree = { ...fileTree, [name]: { file: { contents: '' } } };
@@ -311,12 +311,9 @@ const Project = () => {
             }
             setOpenFolders(prev => new Set([...prev, newItemDialog.parentPath]));
         }
-
         setFileTree(newTree);
-        saveFileTree(newTree);
         setNewItemDialog(null);
         setNewItemName('');
-
         if (newItemDialog.type === 'file') {
             const fullPath = newItemDialog.parentPath ? `${newItemDialog.parentPath}/${name}` : name;
             setCurrentFile(fullPath);
@@ -329,7 +326,6 @@ const Project = () => {
         const pathParts = path.split('/');
         const newTree = deleteNodeByPath(fileTree, pathParts);
         setFileTree(newTree);
-        saveFileTree(newTree);
         if (currentFile === path || currentFile?.startsWith(path + '/')) {
             setCurrentFile(null);
             setOpenFiles(prev => prev.filter(f => f !== path && !f.startsWith(path + '/')));
@@ -348,6 +344,7 @@ const Project = () => {
         return node?.file?.contents ?? null;
     }, [getNodeByPath]);
 
+    // ── Drag handlers ──
     const getClientX = (e) => e.touches ? e.touches[0].clientX : e.clientX;
     const getClientY = (e) => e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -357,7 +354,6 @@ const Project = () => {
     const handleDrag = useCallback((e) => {
         const clientX = getClientX(e);
         const clientY = getClientY(e);
-
         if (isDragging.current) {
             const container = e.currentTarget.parentElement;
             const rect = container.getBoundingClientRect();
@@ -372,11 +368,12 @@ const Project = () => {
         }
     }, []);
 
-    const handleDragEnd = useCallback(() => { 
-        isDragging.current = false; 
-        isDraggingTerminal.current = false; 
+    const handleDragEnd = useCallback(() => {
+        isDragging.current = false;
+        isDraggingTerminal.current = false;
     }, []);
 
+    // ── Collaborators ──
     const handleUserClick = useCallback((id) => {
         setSelectedUserId(prev => {
             const next = new Set(prev);
@@ -405,7 +402,6 @@ const Project = () => {
     const inviteByEmail = useCallback(() => {
         const email = searchEmail.trim();
         if (!email) return;
-
         setInvitingEmail(true);
         axios.post('/projects/invite-email', { projectId, email })
             .then((res) => {
@@ -423,21 +419,30 @@ const Project = () => {
             .finally(() => setInvitingEmail(false));
     }, [searchEmail, projectId]);
 
+    // ── Message send ──
     const messageInputRef = useRef(null);
-    
     const send = useCallback(() => {
-        if (!message.trim()) { 
-            toast.error("Message cannot be empty"); 
-            return; 
+        if (!message.trim()) {
+            toast.error("Message cannot be empty");
+            return;
+        }
+        const socket = getSocket();
+        if (!socket || !socket.connected) {
+            toast.warning("Reconnecting...");
+            initializeSocket(projectId);
+            setTimeout(() => {
+                if (getSocket()?.connected) toast.success("Reconnected!");
+            }, 2000);
+            return;
         }
         const timestamp = Date.now();
         sendMessage('project-message', { message, sender: user, timestamp });
         setMessages(prev => [...prev, { message, sender: user, timestamp }]);
         setMessage("");
         if (messageInputRef.current) messageInputRef.current.style.height = 'auto';
-    }, [message, user]);
+    }, [message, user, projectId]);
 
-    // FIX: Use CodeBlock with proper jsx filtering
+    // ── Render AI message ──
     const WriteAiMessage = useCallback((message) => {
         let obj;
         try {
@@ -451,16 +456,11 @@ const Project = () => {
         } catch (e) {
             obj = { text: String(message) };
         }
-        
         return (
             <div className='overflow-auto bg-slate-800 text-slate-100 rounded-lg p-2 sm:p-3 text-xs sm:text-sm'>
-                <Markdown 
-                    options={{ 
-                        overrides: { 
-                            code: { 
-                                component: CodeBlock 
-                            } 
-                        },
+                <Markdown
+                    options={{
+                        overrides: { code: { component: CodeBlock } },
                         wrapper: 'div',
                         forceBlock: true
                     }}
@@ -471,113 +471,252 @@ const Project = () => {
         );
     }, []);
 
-    useEffect(() => {
-        if (messageBox.current) messageBox.current.scrollTop = messageBox.current.scrollHeight;
-    }, [messages]);
-
+    // ── Save file tree ──
     const saveFileTree = useCallback((ft) => {
-        axios.put('/projects/update-file-tree', { projectId: project._id, fileTree: ft }).catch(() => {});
+        if (!project._id) return;
+        axios.put('/projects/update-file-tree', { projectId: project._id, fileTree: ft })
+            .catch(err => {
+                console.error('Failed to save file tree:', err);
+                toast.error('Failed to save file tree');
+            });
     }, [project._id]);
 
-    const autoInstall = useCallback(async (ft) => {
-        if (!webContainerRef.current) {
-            toast.error("Container not ready – cannot auto‑install.");
+    // ── Execute project (mount + install + start) ──
+    const executeProject = useCallback(async (ft, options = {}) => {
+        const { autoStart = true } = options;
+        if (isExecuting) {
+            toast.warning('Already executing a project. Please wait.');
+            return;
+        }
+        if (runProcess) {
+            try {
+                runProcess.kill();
+                setRunProcess(null);
+                setIsRunning(false);
+                setIframeUrl(null);
+                addLog('⚠️ Stopped previous process', 'info');
+            } catch (err) { console.warn('Error killing process:', err); }
+        }
+        if (!ft || typeof ft !== 'object' || Object.keys(ft).length === 0) {
+            toast.error('No files to execute');
             return;
         }
 
-        const isValid = ft && typeof ft === 'object' &&
-            Object.keys(ft).length > 0 &&
-            JSON.stringify(ft) !== 'null';
-
-        if (!isValid) {
-            addLog('⚠️ Invalid file tree received, skipping mount.', 'error');
-            return;
-        }
-
-        setShowTerminal(true);
+        setIsExecuting(true);
         setTerminalLogs([]);
-        setIsInstalling(true);
-        addLog('🤖 AI generated new code — installing packages...', 'info');
-        
-        try {
-            await webContainerRef.current.mount(toWebContainerTree(ft));
-            addLog('✓ Files mounted.', 'success');
-            const installProcess = await webContainerRef.current.spawn("npm", ["install"]);
-            installProcess.output.pipeTo(new WritableStream({
-                write(chunk) { addLog(chunk.trim(), 'log'); }
-            }));
-            await new Promise(resolve => installProcess.exit.then(resolve));
-            addLog('✓ Packages installed! Click Run to start the server.', 'success');
-        } catch (err) {
-            addLog(`Error: ${err.message}`, 'error');
-        } finally {
-            setIsInstalling(false);
-        }
-    }, [addLog, toWebContainerTree]);
+        setShowTerminal(true);
 
+        try {
+            // 1. Wait for WebContainer with timeout
+            addLog('⏳ Waiting for WebContainer...', 'info');
+            let container = webContainerRef.current;
+            if (!container) {
+                const timeout = 30000;
+                const startTime = Date.now();
+                while (!container && (Date.now() - startTime) < timeout) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    container = webContainerRef.current;
+                }
+                if (!container) throw new Error('WebContainer initialization timed out.');
+            }
+            addLog('✅ WebContainer ready', 'success');
+
+            // 2. Mount files
+            const webTree = toWebContainerTree(ft);
+            addLog('📦 Mounting files...', 'info');
+            await container.mount(webTree);
+            addLog('✅ Files mounted', 'success');
+
+            // 3. Check package.json
+            const packageNode = getNodeByPath(ft, ['package.json']);
+            if (!packageNode || !packageNode.file) {
+                addLog('⚠️ No package.json found. Skipping install/start.', 'warning');
+                setIsExecuting(false);
+                return;
+            }
+            let packageJson;
+            try {
+                packageJson = JSON.parse(packageNode.file.contents);
+            } catch (e) {
+                throw new Error('Invalid package.json');
+            }
+
+            // 4. Install dependencies
+            addLog('📥 Running npm install...', 'info');
+            setIsInstalling(true);
+            const installProcess = await container.spawn('npm', ['install']);
+            let installOutput = '';
+            installProcess.output.pipeTo(
+                new WritableStream({
+                    write(chunk) {
+                        const text = chunk.trim();
+                        if (text) { addLog(text, 'log'); installOutput += text + '\n'; }
+                    },
+                })
+            );
+            const installExit = await installProcess.exit;
+            setIsInstalling(false);
+            if (installExit !== 0) {
+                throw new Error(`npm install failed with code ${installExit}\n${installOutput}`);
+            }
+            addLog('✅ npm install completed', 'success');
+
+            // 5. Determine start command
+            let startCommand = packageJson.scripts?.start;
+            if (!startCommand) {
+                if (packageJson.scripts?.dev) startCommand = packageJson.scripts.dev;
+                else startCommand = 'node server.js';
+                addLog(`⚠️ No "start" script, using "${startCommand}"`, 'warning');
+            }
+
+            // 6. Register server-ready listener
+            let serverReadyHandler = null;
+            const serverReadyPromise = new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => reject(new Error('Server did not start within 60s')), 60000);
+                serverReadyHandler = (port, url) => {
+                    clearTimeout(timeoutId);
+                    resolve(url);
+                };
+                container.on('server-ready', serverReadyHandler);
+            });
+
+            // 7. Start the app
+            setIsRunning(true);
+            const startProcess = await container.spawn('npm', ['run', 'start']);
+            setRunProcess(startProcess);
+            startProcess.output.pipeTo(
+                new WritableStream({
+                    write(chunk) { const text = chunk.trim(); if (text) addLog(text, 'log'); },
+                })
+            );
+
+            // Wait for server-ready or process exit
+            const url = await Promise.race([
+                serverReadyPromise,
+                startProcess.exit.then(code => {
+                    if (code !== 0) throw new Error(`Process exited with code ${code}`);
+                    return null;
+                })
+            ]);
+
+            if (url) {
+                setIframeUrl(url);
+                addLog(`✅ Server ready at ${url}`, 'success');
+                setIsRunning(false);
+            }
+            if (serverReadyHandler) container.off('server-ready', serverReadyHandler);
+
+        } catch (error) {
+            console.error('Execution error:', error);
+            addLog(`❌ Error: ${error.message}`, 'error');
+            toast.error(error.message || 'Failed to execute project');
+            setIsRunning(false);
+            setRunProcess(null);
+            setIframeUrl(null);
+        } finally {
+            setIsExecuting(false);
+        }
+    }, [isExecuting, runProcess, toWebContainerTree, getNodeByPath, addLog]);
+
+    // ── AI Project Generation (HTTP) ──
+    const generateProject = useCallback(async (prompt) => {
+        if (!prompt || !prompt.trim()) {
+            toast.error('Please enter a prompt');
+            return;
+        }
+        if (isGeneratingAI) {
+            toast.warning('Already generating...');
+            return;
+        }
+        setIsGeneratingAI(true);
+        setTerminalLogs([]);
+        setShowTerminal(true);
+        setIframeUrl(null);
+
+        const abortController = new AbortController();
+        setGenerationAbortController(abortController);
+
+        try {
+            addLog('🤖 Generating AI project...', 'info');
+            addLog(`📝 Prompt: ${prompt}`, 'info');
+
+            const response = await axios.post(
+                '/ai/generate-project',
+                { projectId, prompt: prompt.trim() },
+                { signal: abortController.signal, timeout: 120000 }
+            );
+            const { data } = response;
+            if (!data.success) throw new Error(data.message || 'AI generation failed');
+
+            const fileTreeData = data.ai?.fileTree;
+            const aiText = data.ai?.text;
+            if (!fileTreeData || typeof fileTreeData !== 'object' || Object.keys(fileTreeData).length === 0) {
+                throw new Error('AI did not generate any valid files.');
+            }
+            addLog(`✅ AI generated ${Object.keys(fileTreeData).length} files`, 'success');
+
+            if (data.project) setProject(data.project);
+            setFileTree(fileTreeData);
+
+            if (aiText) {
+                setMessages(prev => [...prev, {
+                    sender: { _id: 'ai', email: 'AI Assistant' },
+                    message: aiText,
+                    timestamp: Date.now()
+                }]);
+            }
+
+            await executeProject(fileTreeData, { autoStart: true });
+            toast.success('Project generated and running!');
+
+        } catch (error) {
+            if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+                addLog('⏹️ Generation cancelled', 'info');
+                toast.info('Generation cancelled');
+                return;
+            }
+            console.error('AI Generation Error:', error);
+            // Log more details for debugging
+            if (error.response) {
+                console.error('Response status:', error.response.status);
+                console.error('Response data:', error.response.data);
+            }
+            addLog(`❌ Error: ${error.message}`, 'error');
+            toast.error(error.message || 'Failed to generate project');
+        } finally {
+            setIsGeneratingAI(false);
+            setGenerationAbortController(null);
+        }
+    }, [projectId, isGeneratingAI, addLog, executeProject]);
+
+    // ── Manual Run ──
     const handleRun = useCallback(async () => {
         if (!webContainer) {
-            toast.error("WebContainer not ready yet. Please wait.");
+            toast.error('WebContainer not ready');
             return;
         }
-
         if (isRunning || isInstalling) {
-            runProcess?.kill();
-            setRunProcess(null);
-            setIsRunning(false);
-            setIsInstalling(false);
-            setIframeUrl(null);
-            addLog('Process stopped.', 'error');
+            if (runProcess) {
+                runProcess.kill();
+                setRunProcess(null);
+                setIsRunning(false);
+                setIframeUrl(null);
+                addLog('Process stopped.', 'error');
+            }
             return;
         }
-        
-        setShowTerminal(true);
-        setTerminalLogs([]);
-        setIsInstalling(true);
-        addLog('📦 Mounting file system...', 'info');
-        
-        try {
-            await webContainer.mount(toWebContainerTree(fileTree));
-            addLog('✓ Files mounted.', 'success');
-            addLog('📥 Installing packages... this may take a moment', 'info');
-            
-            const installProcess = await webContainer.spawn("npm", ["install"]);
-            installProcess.output.pipeTo(new WritableStream({ 
-                write(chunk) { addLog(chunk.trim(), 'log'); } 
-            }));
-            await new Promise(resolve => installProcess.exit.then(resolve));
-            
-            addLog('✓ Packages installed successfully!', 'success');
-            addLog('🚀 Starting development server...', 'info');
-            setIsInstalling(false);
-            setIsRunning(true);
-            
-            if (runProcess) runProcess.kill();
-            
-            const tempRunProcess = await webContainer.spawn("npm", ["start"]);
-            tempRunProcess.output.pipeTo(new WritableStream({ 
-                write(chunk) { addLog(chunk.trim(), 'log'); } 
-            }));
-            setRunProcess(tempRunProcess);
-            
-            webContainer.on('server-ready', (port, url) => {
-                addLog(`✓ Server ready → ${url}`, 'success');
-                setIframeUrl(url);
-                setIsRunning(false);
-            });
-        } catch (error) {
-            addLog(`Error: ${error.message}`, 'error');
-            setIsInstalling(false);
-            setIsRunning(false);
+        if (Object.keys(fileTree).length === 0) {
+            toast.error('No files to run');
+            return;
         }
-    }, [webContainer, fileTree, isRunning, isInstalling, runProcess, addLog, toWebContainerTree]);
+        await executeProject(fileTree, { autoStart: true });
+    }, [webContainer, isRunning, isInstalling, runProcess, fileTree, addLog, executeProject]);
 
+    // ── Leave / Delete ──
     const leaveCurrentProject = useCallback(async () => {
-        if (!window.confirm('Leave this project? You will lose access to its chat and files.')) return;
+        if (!window.confirm('Leave this project?')) return;
         toast.promise(
-            axios.delete(`/projects/${projectId}/leave`).then(() => {
-                navigate('/home');
-            }),
+            axios.delete(`/projects/${projectId}/leave`).then(() => navigate('/home')),
             { pending: 'Leaving...', success: 'Left project', error: 'Failed' }
         );
     }, [projectId, navigate]);
@@ -585,185 +724,164 @@ const Project = () => {
     const deleteCurrentProject = useCallback(async () => {
         if (!window.confirm('Delete this project?')) return;
         toast.promise(
-            axios.delete(`/projects/${projectId}`).then(() => { 
-                sendMessage('project-deleted', { projectId }); 
-                navigate('/home'); 
+            axios.delete(`/projects/${projectId}`).then(() => {
+                sendMessage('project-deleted', { projectId });
+                navigate('/home');
             }),
             { pending: 'Deleting...', success: 'Deleted!', error: 'Failed' }
         );
     }, [projectId, navigate]);
 
-    // Initialize project with proper cleanup
+    // ─── Initialization ──────────────────────────────────────────────────────
     useEffect(() => {
         if (!projectId) {
             toast.error('Project does not exist!');
             navigate('/home');
             return;
         }
-
         let isMounted = true;
 
-        const initProject = async () => {
+        const init = async () => {
             try {
-                initializeSocket(project._id);
-                
-                const container = await getWebContainer();
-                if (isMounted) {
-                    setWebContainer(container);
-                    webContainerRef.current = container;
+                let socket = null;
+                let attempts = 0;
+                while (!socket && attempts < 3) {
+                    socket = initializeSocket(project._id);
+                    if (socket?.connected) break;
+                    attempts++;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                if (!socket?.connected) toast.warning('Real-time features may be limited.');
+
+                try {
+                    const container = await getWebContainer();
+                    if (isMounted && container) {
+                        setWebContainer(container);
+                        webContainerRef.current = container;
+                    }
+                } catch (err) {
+                    console.error('WebContainer init error:', err);
+                    toast.warning('WebContainer not available.');
                 }
 
-                receiveMessage('project-message', data => {
-                    if (!isMounted) return;
-                    
-                    const withTimeStamp = { ...data, timestamp: data.timestamp ?? Date.now() };
-
-                    if (withTimeStamp?.sender?._id === 'ai' && withTimeStamp?.message) {
-                        try {
-                            const parsed = typeof withTimeStamp.message === 'string'
-                                ? JSON.parse(withTimeStamp.message)
-                                : withTimeStamp.message;
-
-                            const ft = parsed?.fileTree;
-                            if (ft && typeof ft === 'object' && !Array.isArray(ft) && Object.keys(ft).length > 0) {
-                                const mountAndInstall = async () => {
-                                    const containerRef = webContainerRef.current || await getWebContainer();
-                                    if (!webContainerRef.current) {
-                                        webContainerRef.current = containerRef;
-                                        if (isMounted) setWebContainer(containerRef);
-                                    }
-                                    await containerRef.mount(toWebContainerTree(ft));
-                                    if (isMounted) setFileTree(ft);
-                                    autoInstall(ft);
-                                };
-                                mountAndInstall().catch(e => console.error('Mount error:', e));
-                            }
-                        } catch (e) {
-                            console.error('AI parse error:', e);
-                        }
-                    }
-                    if (isMounted) {
-                        setMessages(prev => [...prev, withTimeStamp]);
-                    }
-                });
-
-                receiveMessage('collaborator-added', () => {
-                    axios.get(`/projects/get-project/${projectId}`).then(res => {
-                        if (isMounted) {
-                            setProject(res.data.project);
-                            toast.info('New collaborator added!');
-                        }
-                    });
-                });
-
-                receiveMessage('project-deleted', ({ projectId: dId }) => {
-                    if (dId === projectId && isMounted) {
-                        toast.error('Project deleted!');
-                        navigate('/home');
-                    }
-                });
-
                 const res = await axios.get(`/projects/get-project/${projectId}`);
-                if (isMounted) {
-                    if (!res.data?.project) {
-                        toast.error('Project does not exist!');
-                        navigate('/home');
-                        return;
-                    }
+                if (isMounted && res.data?.project) {
                     setProject(res.data.project);
                     setFileTree(res.data.project.fileTree || {});
                     setMessages(res.data.project?.messages || []);
+                } else if (isMounted) {
+                    toast.error('Project not found');
+                    navigate('/home');
                 }
             } catch (err) {
+                console.error('Init error:', err);
                 if (isMounted) {
-                    toast.error('Project does not exist!');
-                    navigate('/home');
+                    toast.error('Failed to load project');
+                    if (err.response?.status === 404) navigate('/home');
                 }
             }
         };
+        init();
 
-        initProject();
+        // Socket listeners (collaboration only)
+        const messageHandler = (data) => {
+            if (!isMounted) return;
+            // Ignore AI messages with fileTree (handled via HTTP)
+            if (data?.sender?._id === 'ai') {
+                setMessages(prev => [...prev, { ...data, timestamp: data.timestamp ?? Date.now() }]);
+                return;
+            }
+            setMessages(prev => [...prev, { ...data, timestamp: data.timestamp ?? Date.now() }]);
+        };
+        const collaboratorHandler = () => {
+            axios.get(`/projects/get-project/${projectId}`).then(res => {
+                if (isMounted) { setProject(res.data.project); toast.info('New collaborator added!'); }
+            });
+        };
+        const deleteHandler = ({ projectId: dId }) => {
+            if (dId === projectId && isMounted) { toast.error('Project deleted!'); navigate('/home'); }
+        };
+
+        receiveMessage('project-message', messageHandler);
+        receiveMessage('collaborator-added', collaboratorHandler);
+        receiveMessage('project-deleted', deleteHandler);
 
         return () => {
             isMounted = false;
             const socket = getSocket();
             if (socket) {
-                socket.off('project-message');
-                socket.off('collaborator-added');
-                socket.off('project-deleted');
+                socket.off('project-message', messageHandler);
+                socket.off('collaborator-added', collaboratorHandler);
+                socket.off('project-deleted', deleteHandler);
             }
         };
-    }, [projectId, navigate, toWebContainerTree, autoInstall]);
+    }, [projectId, navigate]);
 
-    // Modal search with debounce
-    useEffect(() => {
-        if (!isModalOpen) return;
-        const email = searchEmail.trim();
-        if (email.length < 3) { 
-            setSearchResults([]); 
-            return; 
-        }
-
-        setSearching(true);
-        const timer = setTimeout(() => {
-            axios.get('/users/search', { params: { email } })
-                .then(res => {
-                    const existingIds = new Set(
-                        (project.users || []).map(pu => (typeof pu === 'string' ? pu : pu._id)?.toString())
-                    );
-                    const filtered = res.data.users.filter(u => !existingIds.has(u._id?.toString()));
-                    setSearchResults(filtered);
-                })
-                .catch(() => setSearchResults([]))
-                .finally(() => setSearching(false));
-        }, 400);
-
-        return () => clearTimeout(timer);
-    }, [searchEmail, isModalOpen, project.users]);
-
-    useEffect(() => {
-        if (!isModalOpen) {
-            setSearchEmail('');
-            setSearchResults([]);
-            setSelectedUserId(new Set());
-        }
-    }, [isModalOpen]);
-
+    // ── Auto-save file tree ──
     useEffect(() => {
         if (project._id && Object.keys(fileTree).length > 0) {
             saveFileTree(fileTree);
         }
     }, [fileTree, project._id, saveFileTree]);
 
-    const isValidEmailFormat = useCallback((email) => /^\S+@\S+\.\S+$/.test(email), []);
+    // ── Modal search ──
+    useEffect(() => {
+        if (!isModalOpen) {
+            setSearchEmail('');
+            setSearchResults([]);
+            setSelectedUserId(new Set());
+            return;
+        }
+        const email = searchEmail.trim();
+        if (email.length < 3) {
+            setSearchResults([]);
+            return;
+        }
+        setSearching(true);
+        const timer = setTimeout(() => {
+            axios.get('/users/search', { params: { email } })
+                .then(res => {
+                    const existingIds = new Set((project.users || []).map(pu => (typeof pu === 'string' ? pu : pu._id)?.toString()));
+                    const filtered = res.data.users.filter(u => !existingIds.has(u._id?.toString()));
+                    setSearchResults(filtered);
+                })
+                .catch(() => setSearchResults([]))
+                .finally(() => setSearching(false));
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [searchEmail, isModalOpen, project.users]);
 
+    const isValidEmailFormat = useCallback((email) => /^\S+@\S+\.\S+$/.test(email), []);
     const logColor = { info: 'text-blue-400', success: 'text-green-400', error: 'text-red-400', log: 'text-slate-300' };
 
-    // Back button handler
     const handleBack = () => {
-        if (window.history.length > 2) {
-            navigate(-1);
-        } else {
-            navigate('/home');
-        }
+        window.history.length > 2 ? navigate(-1) : navigate('/home');
     };
 
+    // ── Handle AI Prompt ──
+    const handleAIPrompt = useCallback(async () => {
+        const prompt = message.trim();
+        if (!prompt) { toast.error('Please enter a message'); return; }
+        const generateKeywords = ['generate', 'create', 'build', 'make', 'develop', 'write', 'code'];
+        const isGenerate = generateKeywords.some(kw => prompt.toLowerCase().includes(kw));
+        if (isGenerate) {
+            await generateProject(prompt);
+        } else {
+            send();
+        }
+    }, [message, generateProject, send]);
+
+    // ─── Render ──────────────────────────────────────────────────────────────
     return (
         <div className='h-[calc(100vh-56px)] w-full flex overflow-hidden bg-slate-900'>
-            {/* ── LEFT: Chat ── */}
+            {/* LEFT: Chat */}
             <div className={`relative flex flex-col h-full bg-slate-900 border-r border-slate-700 
                 ${mobileView === 'chat' ? 'flex w-full' : 'hidden'} 
                 md:flex md:w-[280px] lg:w-[320px] shrink-0`}>
                 
-                {/* Chat Header with Back Button */}
                 <div className='flex items-center justify-between px-2 sm:px-3 py-2 sm:py-2.5 bg-slate-800 border-b border-slate-700 shrink-0'>
                     <div className='flex items-center gap-2 min-w-0'>
-                        {/* Back Button */}
-                        <button 
-                            onClick={handleBack} 
-                            className='group flex items-center gap-1 sm:gap-2 text-slate-400 hover:text-white transition-colors duration-200 text-xs sm:text-sm shrink-0'
-                            aria-label='Go back'
-                        >
+                        <button onClick={handleBack} className='group flex items-center gap-1 sm:gap-2 text-slate-400 hover:text-white transition-colors duration-200 text-xs sm:text-sm shrink-0'>
                             <svg className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
@@ -775,36 +893,23 @@ const Project = () => {
                         </div>
                     </div>
                     <div className='flex items-center gap-0.5 sm:gap-1 ml-1 sm:ml-2 shrink-0'>
-                        <button 
-                            onClick={() => setMobileView('code')} 
-                            className='md:hidden flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition'
-                        >
+                        <button onClick={() => setMobileView('code')} className='md:hidden flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition'>
                             <i className="ri-code-s-slash-line text-xs sm:text-sm"></i>
                             <span className='hidden xs:inline'>Code</span>
                         </button>
-                        <button 
-                            onClick={() => setIsModalOpen(true)} 
-                            className='flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition'
-                        >
+                        <button onClick={() => setIsModalOpen(true)} className='flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition'>
                             <i className="ri-user-add-fill text-xs sm:text-sm"></i>
                             <span className='hidden sm:inline'>Add</span>
                         </button>
-                        <button 
-                            onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} 
-                            className='p-1 sm:p-1.5 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition'
-                        >
+                        <button onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} className='p-1 sm:p-1.5 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition'>
                             <i className="ri-group-fill text-xs sm:text-base"></i>
                         </button>
-                        <button 
-                            onClick={deleteCurrentProject} 
-                            className='p-1 sm:p-1.5 rounded-lg text-slate-400 hover:bg-red-900/40 hover:text-red-400 transition'
-                        >
+                        <button onClick={deleteCurrentProject} className='p-1 sm:p-1.5 rounded-lg text-slate-400 hover:bg-red-900/40 hover:text-red-400 transition'>
                             <i className="ri-delete-bin-6-line text-xs sm:text-base"></i>
                         </button>
                     </div>
                 </div>
 
-                {/* Messages */}
                 <div ref={messageBox} className='flex-1 overflow-y-auto p-2 sm:p-3 space-y-1.5 sm:space-y-2 custom-scroll'>
                     {messages.map((msg, idx) => {
                         const isOwn = msg.sender?._id === user?._id;
@@ -829,7 +934,6 @@ const Project = () => {
                     })}
                 </div>
 
-                {/* Message Input */}
                 <div className='p-2 sm:p-3 border-t border-slate-700 bg-slate-800 shrink-0'>
                     <div className='flex items-end gap-1 sm:gap-2 bg-slate-700 rounded-2xl border border-slate-600 focus-within:border-blue-500 transition pl-2 sm:pl-4 pr-1 sm:pr-2 py-1 sm:py-2'>
                         <textarea
@@ -843,20 +947,22 @@ const Project = () => {
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    send();
+                                    handleAIPrompt();
                                 }
                             }}
                             rows={1}
                             placeholder='Message or @ai ...'
                             className='flex-1 bg-transparent text-white text-xs sm:text-sm outline-none placeholder-slate-500 resize-none custom-scroll overflow-y-auto max-h-[80px] sm:max-h-[120px] leading-relaxed border-0 ring-0 focus:border-0 focus:ring-0 focus:outline-none shadow-none py-1'
+                            disabled={isGeneratingAI}
                         />
-                        <button onClick={send} className='w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shrink-0'>
-                            <i className="ri-send-plane-fill text-xs sm:text-sm"></i>
+                        <button onClick={handleAIPrompt} disabled={isGeneratingAI || !message.trim()}
+                            className='w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition shrink-0'>
+                            {isGeneratingAI ? <i className="ri-loader-4-line animate-spin text-xs sm:text-sm"></i> : <i className="ri-send-plane-fill text-xs sm:text-sm"></i>}
                         </button>
                     </div>
+                    {isGeneratingAI && <p className='text-xs text-blue-400 mt-1 animate-pulse'>AI is generating your project...</p>}
                 </div>
 
-                {/* Collaborators Side Panel */}
                 <div className={`absolute top-0 left-0 w-full h-full flex flex-col bg-slate-900 border-r border-slate-700 transition-transform duration-200 z-10 ${isSidePanelOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                     <div className='flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-slate-800 border-b border-slate-700'>
                         <h2 className='text-xs sm:text-sm font-semibold text-white'>Collaborators</h2>
@@ -887,7 +993,7 @@ const Project = () => {
                 </div>
             </div>
 
-            {/* ── RIGHT: Editor ── */}
+            {/* RIGHT: Editor */}
             <div className={`flex-1 flex flex-col h-full overflow-hidden min-w-0 ${mobileView === 'code' ? 'flex' : 'hidden'} md:flex`}
                 onMouseMove={handleDrag}
                 onMouseUp={handleDragEnd}
@@ -896,12 +1002,10 @@ const Project = () => {
                 onTouchEnd={handleDragEnd}
             >
                 <div className='flex flex-1 overflow-hidden'>
-                    {/* Explorer Overlay for Mobile */}
                     {explorerOpen && isMobile && (
                         <div onClick={() => setExplorerOpen(false)} className='md:hidden fixed inset-0 bg-black/50 z-10'></div>
                     )}
 
-                    {/* ── Explorer ── */}
                     <div className={`h-full flex flex-col bg-slate-900 border-r border-slate-700 transition-all duration-200 shrink-0 z-20 
                         ${explorerOpen ? 'w-[160px] sm:w-[200px] absolute md:relative inset-y-0 left-0 shadow-2xl md:shadow-none' : 'w-7 sm:w-9'}`}>
                         {explorerOpen ? (
@@ -920,7 +1024,6 @@ const Project = () => {
                                         </button>
                                     </div>
                                 </div>
-
                                 <div className='flex-1 overflow-y-auto py-0.5 sm:py-1 custom-scroll'>
                                     {Object.entries(fileTree || {}).map(([name, node]) => (
                                         <FileTreeNode
@@ -938,7 +1041,6 @@ const Project = () => {
                                             path={name}
                                         />
                                     ))}
-
                                     {newItemDialog && (
                                         <div className='flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-700/50'>
                                             <i className={`text-[10px] sm:text-xs ${newItemDialog.type === 'file' ? 'ri-file-add-line text-slate-400' : 'ri-folder-add-line text-amber-400'}`}></i>
@@ -973,14 +1075,11 @@ const Project = () => {
                         )}
                     </div>
 
-                    {/* ── Code Editor ── */}
                     <div className='flex-1 flex flex-col h-full overflow-hidden min-w-0' ref={codeColumnRef}>
-                        {/* Tabs Bar */}
                         <div className='flex items-center justify-between bg-slate-900 border-b border-slate-700 shrink-0 min-h-0'>
                             <button onClick={() => setMobileView('chat')} className='md:hidden flex items-center justify-center px-2 sm:px-3 py-2 sm:py-2.5 text-slate-400 hover:text-white border-r border-slate-700 shrink-0'>
                                 <i className='ri-arrow-left-line text-xs sm:text-sm'></i>
                             </button>
-
                             <div className='flex overflow-x-auto [&::-webkit-scrollbar]:hidden flex-1'>
                                 {openFiles.map((file) => (
                                     <div key={file} onClick={() => setCurrentFile(file)}
@@ -997,7 +1096,6 @@ const Project = () => {
                                     </div>
                                 ))}
                             </div>
-
                             <div className='flex items-center gap-0.5 sm:gap-2 px-1 sm:px-3 shrink-0'>
                                 <button onClick={() => setShowTerminal(p => !p)}
                                     className={`flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs rounded-lg transition 
@@ -1015,7 +1113,6 @@ const Project = () => {
                             </div>
                         </div>
 
-                        {/* Editor Area */}
                         <div className='flex-1 overflow-hidden relative'>
                             {currentFile && getFileContents(fileTree, currentFile) !== null ? (
                                 <div className='h-full overflow-auto bg-slate-950 custom-scroll'>
@@ -1028,7 +1125,6 @@ const Project = () => {
                                                 const pathParts = currentFile.split('/');
                                                 const newTree = setNodeByPath(fileTree, pathParts, { file: { contents: e.target.innerText } });
                                                 setFileTree(newTree);
-                                                saveFileTree(newTree);
                                             }}
                                             dangerouslySetInnerHTML={{
                                                 __html: hljs.highlight(getFileContents(fileTree, currentFile) || '', { language: 'javascript' }).value
@@ -1045,14 +1141,10 @@ const Project = () => {
                             )}
                         </div>
 
-                        {/* Terminal */}
                         {showTerminal && (
                             <div style={{ height: `${Math.min(terminalHeight, 250)}px` }} className='relative border-t border-slate-700 bg-slate-950 flex flex-col shrink-0'>
-                                <div
-                                    onMouseDown={handleTerminalDragStart}
-                                    onTouchStart={handleTerminalDragStart}
-                                    className='absolute top-0 left-0 w-full h-1 cursor-row-resize hover:bg-blue-500 z-10'
-                                />
+                                <div onMouseDown={handleTerminalDragStart} onTouchStart={handleTerminalDragStart}
+                                    className='absolute top-0 left-0 w-full h-1 cursor-row-resize hover:bg-blue-500 z-10' />
                                 <div className='flex items-center justify-between px-2 sm:px-4 py-1 sm:py-1.5 bg-slate-900 border-b border-slate-700'>
                                     <div className='flex items-center gap-1 sm:gap-2 min-w-0'>
                                         <i className='ri-terminal-line text-slate-400 text-[10px] sm:text-xs'></i>
@@ -1084,22 +1176,14 @@ const Project = () => {
                         )}
                     </div>
 
-                    {/* Preview */}
                     {iframeUrl && webContainer && (
                         <div style={{ width: `${previewWidth}%`, minWidth: '120px' }} className='relative flex flex-col h-full border-l border-slate-700 shrink-0'>
-                            <div
-                                onMouseDown={handleDragStart}
-                                onTouchStart={handleDragStart}
-                                className='absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 transition z-10'
-                            />
+                            <div onMouseDown={handleDragStart} onTouchStart={handleDragStart}
+                                className='absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 transition z-10' />
                             <div className='flex items-center gap-1 sm:gap-2 px-1.5 sm:px-3 py-1.5 sm:py-2 bg-slate-900 border-b border-slate-700'>
                                 <i className='ri-global-line text-slate-400 text-[10px] sm:text-sm'></i>
-                                <input 
-                                    type="text" 
-                                    onChange={(e) => setIframeUrl(e.target.value)} 
-                                    value={iframeUrl}
-                                    className='flex-1 text-[10px] sm:text-xs bg-slate-700 text-white rounded-md px-1.5 sm:px-3 py-1 sm:py-1.5 outline-none border border-slate-600 focus:border-blue-500 min-w-0'
-                                />
+                                <input type="text" onChange={(e) => setIframeUrl(e.target.value)} value={iframeUrl}
+                                    className='flex-1 text-[10px] sm:text-xs bg-slate-700 text-white rounded-md px-1.5 sm:px-3 py-1 sm:py-1.5 outline-none border border-slate-600 focus:border-blue-500 min-w-0' />
                             </div>
                             <iframe src={iframeUrl} className='w-full h-full bg-white' title='Preview' />
                         </div>
@@ -1117,24 +1201,16 @@ const Project = () => {
                                 <i className="ri-close-large-fill text-sm sm:text-base"></i>
                             </button>
                         </div>
-
                         <div className='p-3 sm:p-4 pb-2'>
                             <div className='relative'>
                                 <i className='ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs sm:text-sm'></i>
-                                <input
-                                    type='email'
-                                    value={searchEmail}
-                                    onChange={(e) => setSearchEmail(e.target.value)}
+                                <input type='email' value={searchEmail} onChange={(e) => setSearchEmail(e.target.value)}
                                     placeholder='Search by email...'
-                                    className='w-full bg-slate-700 text-white text-xs sm:text-sm rounded-lg pl-8 sm:pl-9 pr-2 sm:pr-3 py-2 sm:py-2.5 outline-none border border-slate-600 focus:border-blue-500 placeholder-slate-500'
-                                />
+                                    className='w-full bg-slate-700 text-white text-xs sm:text-sm rounded-lg pl-8 sm:pl-9 pr-2 sm:pr-3 py-2 sm:py-2.5 outline-none border border-slate-600 focus:border-blue-500 placeholder-slate-500' />
                             </div>
                         </div>
-
                         <div className='flex flex-col gap-1.5 sm:gap-2 px-3 sm:px-4 pb-3 sm:pb-4 max-h-60 sm:max-h-72 overflow-y-auto custom-scroll min-h-[70px] sm:min-h-[90px]'>
-                            {searching && (
-                                <p className='text-[10px] sm:text-xs text-slate-500 text-center py-3 sm:py-4'>Searching...</p>
-                            )}
+                            {searching && <p className='text-[10px] sm:text-xs text-slate-500 text-center py-3 sm:py-4'>Searching...</p>}
                             {!searching && searchEmail.trim().length > 0 && searchEmail.trim().length < 3 && (
                                 <p className='text-[10px] sm:text-xs text-slate-500 text-center py-3 sm:py-4'>Type at least 3 characters</p>
                             )}
@@ -1144,11 +1220,8 @@ const Project = () => {
                                     {isValidEmailFormat(searchEmail.trim()) && (
                                         <>
                                             <p className='text-[10px] sm:text-xs text-slate-600'>This user is not on CodeSync yet</p>
-                                            <button
-                                                onClick={inviteByEmail}
-                                                disabled={invitingEmail}
-                                                className='flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition'
-                                            >
+                                            <button onClick={inviteByEmail} disabled={invitingEmail}
+                                                className='flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition'>
                                                 {invitingEmail ? <><i className='ri-loader-4-line animate-spin'></i> Sending...</> : <><i className='ri-mail-send-line'></i> Invite via Email</>}
                                             </button>
                                         </>
@@ -1158,7 +1231,6 @@ const Project = () => {
                             {!searching && searchEmail.trim().length === 0 && (
                                 <p className='text-[10px] sm:text-xs text-slate-600 text-center py-3 sm:py-4'>Start typing an email to search</p>
                             )}
-
                             {searchResults.map((u) => (
                                 <div key={u._id} onClick={() => handleUserClick(u._id)}
                                     className={`flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 rounded-lg border cursor-pointer transition 
@@ -1171,11 +1243,8 @@ const Project = () => {
                                 </div>
                             ))}
                         </div>
-
                         <div className='px-3 sm:px-4 py-2 sm:py-3 border-t border-slate-700 flex flex-col xs:flex-row justify-end gap-1.5 sm:gap-3'>
-                            <button onClick={() => setIsModalOpen(false)} className='px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition'>
-                                Cancel
-                            </button>
+                            <button onClick={() => setIsModalOpen(false)} className='px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition'>Cancel</button>
                             <button onClick={inviteCollaborators} disabled={selectedUserId.size === 0}
                                 className='px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition'>
                                 Invite ({selectedUserId.size})
