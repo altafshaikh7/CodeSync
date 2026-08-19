@@ -44,11 +44,22 @@ export const createUserController = async (req, res) => {
 
     const otp = generateOTP()
     await storeOTP(`signup:${email}`, otp)
-    await sendOTP(email, otp)
+    
+    // TEMPORARY FIX: Email send skip karein
+    // await sendOTP(email, otp)
+    
+    console.log('========================================')
+    console.log('SIGNUP OTP for testing:', otp)
+    console.log('Email:', email)
+    console.log('========================================')
 
-    res.status(200).json({ message: 'OTP sent to your email' })
+    res.status(200).json({ 
+      message: 'OTP sent to your email',
+      debugOtp: otp  // Testing ke liye OTP frontend ko bhej rahe hain
+    })
 
   } catch (error) {
+    console.error('Registration error:', error)
     res.status(400).send(error.message);
   }
 }
@@ -78,6 +89,7 @@ export const verifySignupOTPController = async (req, res) => {
     res.status(200).json({ user, token })
 
   } catch (error) {
+    console.error('Verify OTP error:', error)
     res.status(400).send(error.message)
   }
 }
@@ -114,11 +126,22 @@ export const loginController = async (req, res) => {
 
     const otp = generateOTP()
     await storeOTP(`login:${email}`, otp)
-    await sendOTP(email, otp)
+    
+    // TEMPORARY FIX: Email send skip karein
+    // await sendOTP(email, otp)
+    
+    console.log('========================================')
+    console.log('LOGIN OTP for testing:', otp)
+    console.log('Email:', email)
+    console.log('========================================')
 
-    res.status(200).json({ message: 'OTP sent to your email' })
+    res.status(200).json({ 
+      message: 'OTP sent to your email',
+      debugOtp: otp  // Testing ke liye OTP frontend ko bhej rahe hain
+    })
 
   } catch (error) {
+    console.error('Login error:', error)
     res.status(400).send(error.message);
   }
 }
@@ -140,6 +163,7 @@ export const verifyLoginOTPController = async (req, res) => {
     res.status(200).json({ user, token })
 
   } catch (error) {
+    console.error('Verify login OTP error:', error)
     res.status(400).send(error.message)
   }
 }
@@ -174,7 +198,7 @@ export const getAllUsersController = async (req, res) => {
     const loggedInUser = await userModel.findOne({
       email: req.user.email
     })
-    const allUsers = await userService.getAllUsers({ userId: loggedInUser._id });
+    const allUsers = await userService.getAllUsers({ userId: loggedInUser._id});
 
     return res.status(200).json({
       user: allUsers
@@ -234,7 +258,7 @@ export const updatePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body
 
     if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ message: 'New password must be at least 6 characters' })
+      return res.status(400).json({ message: 'New password must be at least 6characters' })
     }
 
     const user = await userModel.findById(req.user._id).select('+password')
@@ -420,8 +444,8 @@ export const searchUser = async (req, res) => {
     }
 
     const users = await userModel.find({
-      email: { $regex: email.trim(), $options: 'i' }, // case-insensitive partial match
-      _id: { $ne: req.user._id } // apna khud ka email result mein na aaye
+      email: { $regex: email.trim(), $options: 'i' },
+      _id: { $ne: req.user._id }
     }).select('_id email').limit(5)
 
     res.json({ users })

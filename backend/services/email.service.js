@@ -8,7 +8,7 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 // ─────────────────────────────────────────────
 export const sendOTP = async (email, otp) => {
     const { data, error } = await resend.emails.send({
-        from: 'CodeSync <onboarding@resend.dev>',
+        from: 'CodeSync <altafshaikh07781@gmail.com>',
         to: email,
         subject: 'Your CodeSync OTP',
         html: `
@@ -60,7 +60,7 @@ export const sendProjectInvite = async (
 ) => {
 
     const { data, error } = await resend.emails.send({
-        from: 'CodeSync <onboarding@resend.dev>',
+        from: 'CodeSync <altafshaikh07781@gmail.com>',
         to: email,
         subject: `${inviterName} invited you to collaborate on "${projectName}" - CodeSync`,
         html: `
@@ -131,7 +131,7 @@ export const sendProjectInviteSignup = async (
 ) => {
 
     const { data, error } = await resend.emails.send({
-        from: 'CodeSync <onboarding@resend.dev>',
+        from: 'CodeSync <altafshaikh07781@gmail.com>',
         to: email,
         subject: `${inviterName} invited you to join "${projectName}" on CodeSync`,
         html: `
