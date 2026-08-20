@@ -138,7 +138,7 @@ export const NotificationProvider = ({ children }) => {
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
         }
-        intervalRef.current = setInterval(fetchInvites, 30000);
+        intervalRef.current = setInterval(fetchInvites, 120000);
 
         // Cleanup on unmount or user change
         return () => {
