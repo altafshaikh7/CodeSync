@@ -20,19 +20,15 @@ const CodeBlock = ({ className, children, ...props }) => {
         }
     }, [className, children]);
 
-    // Remove ALL non-standard props before passing to DOM
-    // Specifically filter out 'jsx' and other custom props
     const safeProps = {};
     const allowedProps = ['id', 'style', 'title', 'dir', 'lang', 'tabIndex', 'role'];
     
-    // Only copy allowed props
     Object.keys(props).forEach(key => {
         if (allowedProps.includes(key)) {
             safeProps[key] = props[key];
         }
     });
     
-    // className already passed separately, don't duplicate
     return <code className={className} ref={ref} {...safeProps}>{children}</code>;
 };
 
@@ -138,6 +134,10 @@ const Project = () => {
     const location = useLocation();
     const initialProject = location.state?.project || {};
     const projectId = initialProject._id;
+
+    // ── Debug: Check projectId ──
+    console.log('📌 Project ID:', projectId);
+    console.log('📌 Initial Project:', initialProject);
 
     // ── State ──
     const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
@@ -255,16 +255,49 @@ const Project = () => {
         return { ...tree, [head]: deleteNodeByPath(tree[head], rest) };
     }, []);
 
+    // ── ✅ FIX: Convert file tree for WebContainer (FLAT structure - NO folders) ──
     const toWebContainerTree = useCallback((tree) => {
         if (!tree || typeof tree !== 'object') return {};
+        
         const result = {};
-        for (const [name, node] of Object.entries(tree)) {
-            if (node && typeof node === 'object' && node.file) {
-                result[name] = { file: { contents: node.file.contents ?? '' } };
-            } else if (node && typeof node === 'object') {
-                result[name] = { directory: toWebContainerTree(node) };
+        
+        function walk(node, path = '') {
+            for (const [key, value] of Object.entries(node)) {
+                if (!value || typeof value !== 'object') continue;
+                
+                if (value.file && typeof value.file.contents === 'string') {
+                    // File - flatten name (remove any path)
+                    let flatName = key;
+                    // Remove any path separators
+                    flatName = flatName.replace(/[\/\\]/g, '-');
+                    // Remove "src-" prefix
+                    flatName = flatName.replace(/^src-/, '');
+                    // Remove any invalid characters
+                    flatName = flatName.replace(/[^a-zA-Z0-9.\-]/g, '');
+                    
+                    // If path exists, combine
+                    const finalName = path ? `${path}-${flatName}` : flatName;
+                    // Clean any double dashes
+                    const cleanName = finalName.replace(/--/g, '-');
+                    // Remove leading/trailing dashes
+                    const finalClean = cleanName.replace(/^-/, '').replace(/-$/, '');
+                    result[finalClean || 'file.js'] = { file: { contents: value.file.contents || '' } };
+                } else {
+                    // Folder - recurse with path
+                    let cleanKey = key;
+                    cleanKey = cleanKey.replace(/[\/\\]/g, '-');
+                    cleanKey = cleanKey.replace(/[^a-zA-Z0-9.\-]/g, '');
+                    // Skip "src" folder - flatten its contents directly
+                    if (cleanKey === 'src') {
+                        walk(value, path || '');
+                    } else {
+                        walk(value, path ? `${path}-${cleanKey}` : cleanKey);
+                    }
+                }
             }
         }
+        
+        walk(tree);
         return result;
     }, []);
 
@@ -426,20 +459,48 @@ const Project = () => {
             toast.error("Message cannot be empty");
             return;
         }
+        
         const socket = getSocket();
         if (!socket || !socket.connected) {
             toast.warning("Reconnecting...");
             initializeSocket(projectId);
             setTimeout(() => {
-                if (getSocket()?.connected) toast.success("Reconnected!");
+                if (getSocket()?.connected) {
+                    toast.success("Reconnected!");
+                    const newSocket = getSocket();
+                    if (newSocket && newSocket.connected) {
+                        const timestamp = Date.now();
+                        const messageData = { 
+                            message: message.trim(), 
+                            sender: user, 
+                            timestamp 
+                        };
+                        sendMessage('project-message', messageData);
+                        setMessages(prev => [...prev, { ...messageData, _id: 'temp-' + timestamp }]);
+                        setMessage("");
+                    }
+                }
             }, 2000);
             return;
         }
+        
         const timestamp = Date.now();
-        sendMessage('project-message', { message, sender: user, timestamp });
-        setMessages(prev => [...prev, { message, sender: user, timestamp }]);
+        const messageData = { 
+            message: message.trim(), 
+            sender: user, 
+            timestamp 
+        };
+        
+        console.log('📤 Sending message:', messageData);
+        sendMessage('project-message', messageData);
+        
+        // ✅ Add to local messages immediately
+        setMessages(prev => [...prev, { ...messageData, _id: 'temp-' + timestamp }]);
         setMessage("");
-        if (messageInputRef.current) messageInputRef.current.style.height = 'auto';
+        
+        if (messageInputRef.current) {
+            messageInputRef.current.style.height = 'auto';
+        }
     }, [message, user, projectId]);
 
     // ── Render AI message ──
@@ -521,13 +582,17 @@ const Project = () => {
             }
             addLog('✅ WebContainer ready', 'success');
 
-            // 2. Mount files
+            // 2. ✅ FIX: Use FLAT structure
+            addLog('📦 Preparing file tree...', 'info');
             const webTree = toWebContainerTree(ft);
-            addLog('📦 Mounting files...', 'info');
+            
+            addLog(`📦 Mounting ${Object.keys(webTree).length} files...`, 'info');
+            
+            // 3. Mount files
             await container.mount(webTree);
             addLog('✅ Files mounted', 'success');
 
-            // 3. Check package.json
+            // 4. Check package.json
             const packageNode = getNodeByPath(ft, ['package.json']);
             if (!packageNode || !packageNode.file) {
                 addLog('⚠️ No package.json found. Skipping install/start.', 'warning');
@@ -541,7 +606,7 @@ const Project = () => {
                 throw new Error('Invalid package.json');
             }
 
-            // 4. Install dependencies
+            // 5. Install dependencies
             addLog('📥 Running npm install...', 'info');
             setIsInstalling(true);
             const installProcess = await container.spawn('npm', ['install']);
@@ -561,26 +626,33 @@ const Project = () => {
             }
             addLog('✅ npm install completed', 'success');
 
-            // 5. Determine start command
-            let startCommand = packageJson.scripts?.start;
-            if (!startCommand) {
-                if (packageJson.scripts?.dev) startCommand = packageJson.scripts.dev;
-                else startCommand = 'node server.js';
-                addLog(`⚠️ No "start" script, using "${startCommand}"`, 'warning');
-            }
+            // 6. Determine start command
+            let startCommand = packageJson.scripts?.start || packageJson.scripts?.dev || 'node server.js';
+            addLog(`▶️ Starting with: ${startCommand}`, 'info');
 
-            // 6. Register server-ready listener
-            let serverReadyHandler = null;
+            // 7. Register server-ready listener
+            let serverReadyResolved = false;
+            let capturedUrl = null;
+            
             const serverReadyPromise = new Promise((resolve, reject) => {
-                const timeoutId = setTimeout(() => reject(new Error('Server did not start within 60s')), 60000);
-                serverReadyHandler = (port, url) => {
+                const timeoutId = setTimeout(() => {
+                    if (!serverReadyResolved) {
+                        reject(new Error('Server did not start within 60s'));
+                    }
+                }, 60000);
+
+                const handler = (port, url) => {
+                    serverReadyResolved = true;
                     clearTimeout(timeoutId);
-                    resolve(url);
+                    capturedUrl = url || `http://localhost:${port}`;
+                    console.log('✅ Server ready with URL:', capturedUrl);
+                    resolve(capturedUrl);
                 };
-                container.on('server-ready', serverReadyHandler);
+                
+                container.on('server-ready', handler);
             });
 
-            // 7. Start the app
+            // 8. Start the app
             setIsRunning(true);
             const startProcess = await container.spawn('npm', ['run', 'start']);
             setRunProcess(startProcess);
@@ -599,12 +671,17 @@ const Project = () => {
                 })
             ]);
 
+            // ✅ Set iframe URL
             if (url) {
-                setIframeUrl(url);
-                addLog(`✅ Server ready at ${url}`, 'success');
+                let finalUrl = url;
+                if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                    finalUrl = `http://${finalUrl}`;
+                }
+                console.log('🔗 Setting iframe URL:', finalUrl);
+                setIframeUrl(finalUrl);
+                addLog(`✅ Server ready at ${finalUrl}`, 'success');
                 setIsRunning(false);
             }
-            if (serverReadyHandler) container.off('server-ready', serverReadyHandler);
 
         } catch (error) {
             console.error('Execution error:', error);
@@ -628,6 +705,12 @@ const Project = () => {
             toast.warning('Already generating...');
             return;
         }
+        
+        if (!projectId) {
+            toast.error('Project not found. Please create a project first.');
+            return;
+        }
+        
         setIsGeneratingAI(true);
         setTerminalLogs([]);
         setShowTerminal(true);
@@ -639,33 +722,134 @@ const Project = () => {
         try {
             addLog('🤖 Generating AI project...', 'info');
             addLog(`📝 Prompt: ${prompt}`, 'info');
+            addLog(`📌 Project ID: ${projectId}`, 'info');
 
             const response = await axios.post(
                 '/ai/generate-project',
-                { projectId, prompt: prompt.trim() },
-                { signal: abortController.signal, timeout: 120000 }
+                { 
+                    projectId: projectId,
+                    prompt: prompt.trim() 
+                },
+                { 
+                    signal: abortController.signal, 
+                    timeout: 120000 
+                }
             );
+            
+            console.log('📦 AI Response:', response.data);
+            
             const { data } = response;
-            if (!data.success) throw new Error(data.message || 'AI generation failed');
-
-            const fileTreeData = data.ai?.fileTree;
-            const aiText = data.ai?.text;
+            
+            let fileTreeData = data.ai?.fileTree || data.project?.fileTree || data.data?.fileTree;
+            let aiText = data.ai?.text || data.data?.text || data.message;
+            
+            console.log('📁 FileTree received:', fileTreeData);
+            
             if (!fileTreeData || typeof fileTreeData !== 'object' || Object.keys(fileTreeData).length === 0) {
-                throw new Error('AI did not generate any valid files.');
+                addLog('⚠️ No valid fileTree received, using fallback', 'warning');
+                fileTreeData = {
+                    'package.json': {
+                        file: {
+                            contents: JSON.stringify({
+                                name: 'todo-app',
+                                version: '1.0.0',
+                                type: 'module',
+                                scripts: {
+                                    start: 'vite preview',
+                                    dev: 'vite',
+                                    build: 'vite build'
+                                },
+                                dependencies: {
+                                    'react': '^18.2.0',
+                                    'react-dom': '^18.2.0'
+                                },
+                                devDependencies: {
+                                    '@vitejs/plugin-react': '^4.0.0',
+                                    'vite': '^4.3.9'
+                                }
+                            }, null, 2)
+                        }
+                    },
+                    'vite.config.js': {
+                        file: {
+                            contents: `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});`
+                        }
+                    },
+                    'index.html': {
+                        file: {
+                            contents: `<!DOCTYPE html>\n<html>\n<head>\n  <title>Todo App</title>\n</head>\n<body>\n  <div id="root"></div>\n  <script type="module" src="/main.jsx"></script>\n</body>\n</html>`
+                        }
+                    },
+                    'main.jsx': {
+                        file: {
+                            contents: `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App.jsx';\n\nReactDOM.createRoot(document.getElementById('root')).render(<App />);`
+                        }
+                    },
+                    'App.jsx': {
+                        file: {
+                            contents: `import { useState } from 'react';\n\nfunction App() {\n  const [todos, setTodos] = useState([]);\n  const [input, setInput] = useState('');\n\n  const addTodo = () => {\n    if (input.trim()) {\n      setTodos([...todos, { id: Date.now(), text: input.trim(), completed: false }]);\n      setInput('');\n    }\n  };\n\n  const toggleTodo = (id) => {\n    setTodos(todos.map(todo => \n      todo.id === id ? { ...todo, completed: !todo.completed } : todo\n    ));\n  };\n\n  const deleteTodo = (id) => {\n    setTodos(todos.filter(todo => todo.id !== id));\n  };\n\n  return (\n    <div style={{ maxWidth: '500px', margin: '50px auto', padding: '20px', fontFamily: 'system-ui' }}>\n      <h1 style={{ color: '#60a5fa' }}>📋 Todo App</h1>\n      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>\n        <input\n          value={input}\n          onChange={(e) => setInput(e.target.value)}\n          onKeyDown={(e) => e.key === 'Enter' && addTodo()}\n          placeholder=\"Add a todo...\"\n          style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155', background: '#1e293b', color: 'white' }}\n        />\n        <button onClick={addTodo} style={{ padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>\n          Add\n        </button>\n      </div>\n      <ul style={{ listStyle: 'none', padding: 0 }}>\n        {todos.map(todo => (\n          <li key={todo.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', marginBottom: '8px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>\n            <input\n              type=\"checkbox\"\n              checked={todo.completed}\n              onChange={() => toggleTodo(todo.id)}\n              style={{ width: '18px', height: '18px', cursor: 'pointer' }}\n            />\n            <span style={{ flex: 1, textDecoration: todo.completed ? 'line-through' : 'none', color: todo.completed ? '#64748b' : 'white' }}>\n              {todo.text}\n            </span>\n            <button onClick={() => deleteTodo(todo.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px' }}>\n              ✕\n            </button>\n          </li>\n        ))}\n      </ul>\n      {todos.length === 0 && <p style={{ color: '#64748b', textAlign: 'center' }}>No todos yet. Add one above!</p>}\n    </div>\n  );\n}\n\nexport default App;`
+                        }
+                    }
+                };
+                aiText = aiText || 'Generated with fallback template';
+                toast.warning('Using fallback template');
             }
+
             addLog(`✅ AI generated ${Object.keys(fileTreeData).length} files`, 'success');
 
-            if (data.project) setProject(data.project);
+            // ✅ CRITICAL: Set file tree state FIRST
             setFileTree(fileTreeData);
+            
+            // ✅ Update project state
+            setProject(prev => ({
+                ...prev,
+                fileTree: fileTreeData
+            }));
+            
+            // ✅ Force explorer to show files
+            setExplorerOpen(true);
 
+            // Add AI message to chat
             if (aiText) {
-                setMessages(prev => [...prev, {
+                const aiMessage = {
                     sender: { _id: 'ai', email: 'AI Assistant' },
                     message: aiText,
                     timestamp: Date.now()
-                }]);
+                };
+                setMessages(prev => [...prev, aiMessage]);
+                
+                // Also save to server via socket
+                const socket = getSocket();
+                if (socket && socket.connected) {
+                    sendMessage('project-message', {
+                        message: aiText,
+                        sender: { _id: 'ai', email: 'AI Assistant' },
+                        timestamp: Date.now()
+                    });
+                }
             }
 
+            // Save file tree to database
+            try {
+                const saveResponse = await axios.put('/projects/update-file-tree', { 
+                    projectId: projectId, 
+                    fileTree: fileTreeData 
+                });
+                console.log('✅ File tree saved:', saveResponse.data);
+                addLog('✅ File tree saved to database', 'success');
+            } catch (saveError) {
+                console.error('Save error:', saveError);
+                addLog('⚠️ Failed to save file tree to database', 'warning');
+            }
+
+            // ✅ Open first file automatically
+            const firstFile = Object.keys(fileTreeData)[0];
+            if (firstFile) {
+                setCurrentFile(firstFile);
+                setOpenFiles(prev => [...new Set([...prev, firstFile])]);
+            }
+
+            // Execute the project
             await executeProject(fileTreeData, { autoStart: true });
             toast.success('Project generated and running!');
 
@@ -676,18 +860,148 @@ const Project = () => {
                 return;
             }
             console.error('AI Generation Error:', error);
-            // Log more details for debugging
-            if (error.response) {
-                console.error('Response status:', error.response.status);
-                console.error('Response data:', error.response.data);
-            }
+            
+            const fallbackTree = {
+                'package.json': {
+                    file: {
+                        contents: JSON.stringify({
+                            name: 'fallback-app',
+                            version: '1.0.0',
+                            type: 'module',
+                            scripts: {
+                                start: 'vite preview',
+                                dev: 'vite',
+                                build: 'vite build'
+                            },
+                            dependencies: {
+                                'react': '^18.2.0',
+                                'react-dom': '^18.2.0'
+                            },
+                            devDependencies: {
+                                '@vitejs/plugin-react': '^4.0.0',
+                                'vite': '^4.3.9'
+                            }
+                        }, null, 2)
+                    }
+                },
+                'vite.config.js': {
+                    file: {
+                        contents: `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});`
+                    }
+                },
+                'index.html': {
+                    file: {
+                        contents: `<!DOCTYPE html>\n<html>\n<head>\n  <title>My App</title>\n</head>\n<body>\n  <div id="root"></div>\n  <script type="module" src="/main.jsx"></script>\n</body>\n</html>`
+                    }
+                },
+                'main.jsx': {
+                    file: {
+                        contents: `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App.jsx';\n\nReactDOM.createRoot(document.getElementById('root')).render(<App />);`
+                    }
+                },
+                'App.jsx': {
+                    file: {
+                        contents: `import { useState } from 'react';\n\nfunction App() {\n  const [count, setCount] = useState(0);\n\n  return (\n    <div style={{ textAlign: 'center', padding: '50px', fontFamily: 'system-ui' }}>\n      <h1 style={{ color: '#60a5fa' }}>🚀 CodeSync</h1>\n      <p style={{ color: '#94a3b8' }}>Your project is running!</p>\n      <button \n        onClick={() => setCount(count + 1)}\n        style={{ padding: '12px 24px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}\n      >\n        Clicked {count} times\n      </button>\n    </div>\n  );\n}\n\nexport default App;`
+                    }
+                }
+            };
+            
             addLog(`❌ Error: ${error.message}`, 'error');
-            toast.error(error.message || 'Failed to generate project');
+            toast.error(error.message || 'Failed to generate project, using fallback');
+            
+            // ✅ Set fallback file tree
+            setFileTree(fallbackTree);
+            setProject(prev => ({
+                ...prev,
+                fileTree: fallbackTree
+            }));
+            setExplorerOpen(true);
+            
+            // Save fallback to database
+            try {
+                await axios.put('/projects/update-file-tree', { 
+                    projectId: projectId, 
+                    fileTree: fallbackTree 
+                });
+            } catch (saveError) {
+                console.error('Save fallback error:', saveError);
+            }
+            
+            // Open first file
+            const firstFile = Object.keys(fallbackTree)[0];
+            if (firstFile) {
+                setCurrentFile(firstFile);
+                setOpenFiles(prev => [...new Set([...prev, firstFile])]);
+            }
+            
+            try {
+                await executeProject(fallbackTree, { autoStart: true });
+            } catch (execError) {
+                addLog(`❌ Fallback execution failed: ${execError.message}`, 'error');
+            }
+            
         } finally {
             setIsGeneratingAI(false);
             setGenerationAbortController(null);
         }
     }, [projectId, isGeneratingAI, addLog, executeProject]);
+
+    // ── AI Chat ──
+    const chatWithAI = useCallback(async (prompt) => {
+        if (!prompt || !prompt.trim()) {
+            toast.error('Please enter a message');
+            return;
+        }
+        if (isGeneratingAI) {
+            toast.warning('Already processing...');
+            return;
+        }
+        setIsGeneratingAI(true);
+
+        try {
+            addLog('💬 Chatting with AI...', 'info');
+            
+            const userMessage = {
+                sender: { _id: user?._id, email: user?.email || 'You' },
+                message: prompt,
+                timestamp: Date.now()
+            };
+            setMessages(prev => [...prev, userMessage]);
+            setMessage('');
+            
+            const response = await axios.post('/ai/chat', {
+                message: prompt,
+                history: messages.slice(-10).map(m => ({
+                    role: m.sender?._id === 'ai' ? 'assistant' : 'user',
+                    content: m.message
+                }))
+            });
+            
+            const { data } = response;
+            const aiResponse = data.data?.text || data.message || 'No response from AI';
+            
+            addLog('✅ AI response received', 'success');
+            
+            setMessages(prev => [...prev, {
+                sender: { _id: 'ai', email: 'AI Assistant' },
+                message: aiResponse,
+                timestamp: Date.now()
+            }]);
+            
+        } catch (error) {
+            console.error('AI Chat error:', error);
+            toast.error(error.message || 'Failed to get AI response');
+            addLog(`❌ Chat error: ${error.message}`, 'error');
+            
+            setMessages(prev => [...prev, {
+                sender: { _id: 'ai', email: 'AI Assistant' },
+                message: '⚠️ Sorry, I encountered an error. Please try again.',
+                timestamp: Date.now()
+            }]);
+        } finally {
+            setIsGeneratingAI(false);
+        }
+    }, [messages, user, addLog]);
 
     // ── Manual Run ──
     const handleRun = useCallback(async () => {
@@ -783,10 +1097,8 @@ const Project = () => {
         };
         init();
 
-        // Socket listeners (collaboration only)
         const messageHandler = (data) => {
             if (!isMounted) return;
-            // Ignore AI messages with fileTree (handled via HTTP)
             if (data?.sender?._id === 'ai') {
                 setMessages(prev => [...prev, { ...data, timestamp: data.timestamp ?? Date.now() }]);
                 return;
@@ -861,15 +1173,20 @@ const Project = () => {
     // ── Handle AI Prompt ──
     const handleAIPrompt = useCallback(async () => {
         const prompt = message.trim();
-        if (!prompt) { toast.error('Please enter a message'); return; }
+        if (!prompt) { 
+            toast.error('Please enter a message'); 
+            return; 
+        }
+        
         const generateKeywords = ['generate', 'create', 'build', 'make', 'develop', 'write', 'code'];
         const isGenerate = generateKeywords.some(kw => prompt.toLowerCase().includes(kw));
+        
         if (isGenerate) {
             await generateProject(prompt);
         } else {
-            send();
+            await chatWithAI(prompt);
         }
-    }, [message, generateProject, send]);
+    }, [message, generateProject, chatWithAI]);
 
     // ─── Render ──────────────────────────────────────────────────────────────
     return (
@@ -935,6 +1252,32 @@ const Project = () => {
                 </div>
 
                 <div className='p-2 sm:p-3 border-t border-slate-700 bg-slate-800 shrink-0'>
+                    <div className="flex flex-wrap gap-1 sm:gap-2 mb-2">
+                        <button 
+                            onClick={() => setMessage("Explain this code")}
+                            className="text-[8px] sm:text-[10px] px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+                        >
+                            Explain
+                        </button>
+                        <button 
+                            onClick={() => setMessage("Fix this bug")}
+                            className="text-[8px] sm:text-[10px] px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+                        >
+                            Fix Bug
+                        </button>
+                        <button 
+                            onClick={() => setMessage("Write unit tests")}
+                            className="text-[8px] sm:text-[10px] px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+                        >
+                            Write Tests
+                        </button>
+                        <button 
+                            onClick={() => setMessage("Generate React component")}
+                            className="text-[8px] sm:text-[10px] px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+                        >
+                            React Component
+                        </button>
+                    </div>
                     <div className='flex items-end gap-1 sm:gap-2 bg-slate-700 rounded-2xl border border-slate-600 focus-within:border-blue-500 transition pl-2 sm:pl-4 pr-1 sm:pr-2 py-1 sm:py-2'>
                         <textarea
                             ref={messageInputRef}
@@ -960,7 +1303,7 @@ const Project = () => {
                             {isGeneratingAI ? <i className="ri-loader-4-line animate-spin text-xs sm:text-sm"></i> : <i className="ri-send-plane-fill text-xs sm:text-sm"></i>}
                         </button>
                     </div>
-                    {isGeneratingAI && <p className='text-xs text-blue-400 mt-1 animate-pulse'>AI is generating your project...</p>}
+                    {isGeneratingAI && <p className='text-xs text-blue-400 mt-1 animate-pulse'>AI is thinking...</p>}
                 </div>
 
                 <div className={`absolute top-0 left-0 w-full h-full flex flex-col bg-slate-900 border-r border-slate-700 transition-transform duration-200 z-10 ${isSidePanelOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -1182,10 +1525,21 @@ const Project = () => {
                                 className='absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 transition z-10' />
                             <div className='flex items-center gap-1 sm:gap-2 px-1.5 sm:px-3 py-1.5 sm:py-2 bg-slate-900 border-b border-slate-700'>
                                 <i className='ri-global-line text-slate-400 text-[10px] sm:text-sm'></i>
-                                <input type="text" onChange={(e) => setIframeUrl(e.target.value)} value={iframeUrl}
-                                    className='flex-1 text-[10px] sm:text-xs bg-slate-700 text-white rounded-md px-1.5 sm:px-3 py-1 sm:py-1.5 outline-none border border-slate-600 focus:border-blue-500 min-w-0' />
+                                <input 
+                                    type="text" 
+                                    onChange={(e) => setIframeUrl(e.target.value)} 
+                                    value={iframeUrl}
+                                    className='flex-1 text-[10px] sm:text-xs bg-slate-700 text-white rounded-md px-1.5 sm:px-3 py-1 sm:py-1.5 outline-none border border-slate-600 focus:border-blue-500 min-w-0' 
+                                    readOnly
+                                />
                             </div>
-                            <iframe src={iframeUrl} className='w-full h-full bg-white' title='Preview' />
+                            <iframe 
+                                src={iframeUrl} 
+                                className='w-full h-full bg-white' 
+                                title='Preview'
+                                sandbox="allow-scripts allow-modals allow-same-origin allow-forms"
+                                allow="cross-origin-isolated"
+                            />
                         </div>
                     )}
                 </div>
