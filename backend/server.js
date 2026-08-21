@@ -11,16 +11,24 @@ const port = process.env.PORT || 5000;
 
 const server = http.createServer(app);
 
+// ✅ CORS for Socket.io
 const io = new Server(server, {
     cors: {
-        origin: ['http://localhost:5173', 'http://localhost:4000', '*'],
+        origin: [
+            'http://localhost:5173',
+            'http://localhost:4000',
+            'https://codesync-frontendfrontend.onrender.com',
+            'https://codesync-ne50.onrender.com'
+        ],
         methods: ['GET', 'POST'],
-        credentials: true
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization']
     },
-    allowEIO3: true
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
-// ─── Socket Authentication Middleware ──────────────────────────────────────
 io.use(async (socket, next) => {
     try {
         const token = socket.handshake.auth?.token ||
@@ -94,7 +102,6 @@ io.use(async (socket, next) => {
     }
 });
 
-// ─── Socket Connection Handler ──────────────────────────────────────────────
 io.on('connection', socket => {
     socket.roomId = socket.project._id.toString();
 
@@ -102,23 +109,14 @@ io.on('connection', socket => {
 
     socket.join(socket.roomId);
 
-    // ✅ Send confirmation to client
     socket.emit('connection-established', {
         message: 'Connected to project',
         projectId: socket.roomId,
         userId: socket.user._id
     });
 
-    // ─── Handle project messages ────────────────────────────────────────────
     socket.on('project-message', async (data) => {
         try {
-            console.log('📨 Message received:', {
-                roomId: socket.roomId,
-                sender: data.sender?.email || data.sender?._id || 'unknown',
-                messageLength: data.message?.length || 0
-            });
-
-            // ✅ Validate message
             if (!data.message || !data.message.trim()) {
                 console.error('❌ Empty message received');
                 socket.emit('error', { message: 'Message cannot be empty' });
@@ -131,7 +129,6 @@ io.on('connection', socket => {
                 return;
             }
 
-            // ✅ Prepare message data
             const messageData = {
                 sender: {
                     _id: data.sender._id || data.sender.email || 'unknown',
@@ -141,14 +138,9 @@ io.on('connection', socket => {
                 timestamp: data.timestamp || new Date()
             };
 
-            // ✅ Save to database
             const updatedProject = await projectModel.findByIdAndUpdate(
                 socket.roomId,
-                {
-                    $push: {
-                        messages: messageData
-                    }
-                },
+                { $push: { messages: messageData } },
                 { new: true }
             );
 
@@ -160,32 +152,27 @@ io.on('connection', socket => {
 
             console.log('✅ Message saved to database');
 
-            // ✅ Add _id to message for frontend
             const savedMessage = updatedProject.messages[updatedProject.messages.length - 1];
             const messageWithId = {
                 ...messageData,
                 _id: savedMessage._id
             };
 
-            // ✅ Broadcast to ALL clients in the room (including sender)
             io.to(socket.roomId).emit('project-message', messageWithId);
 
             console.log('✅ Message broadcasted to room:', socket.roomId);
 
         } catch (error) {
             console.error('❌ Project message error:', error.message);
-            console.error('Stack:', error.stack);
             socket.emit('error', { message: 'Failed to send message: ' + error.message });
         }
     });
 
-    // ─── Handle collaborator added ──────────────────────────────────────────
     socket.on('collaborator-added', (data) => {
         console.log('👤 Collaborator added:', data);
         io.to(socket.roomId).emit('collaborator-added', data);
     });
 
-    // ─── Handle project deleted ─────────────────────────────────────────────
     socket.on('project-deleted', (data) => {
         console.log('🗑️ Project deleted:', data);
         socket.broadcast
@@ -193,18 +180,18 @@ io.on('connection', socket => {
             .emit('project-deleted', data);
     });
 
-    // ─── Handle disconnect ──────────────────────────────────────────────────
     socket.on('disconnect', () => {
         console.log('❌ User disconnected:', socket.id);
         socket.leave(socket.roomId);
     });
 
-    // ─── Handle errors ──────────────────────────────────────────────────────
     socket.on('error', (error) => {
         console.error('❌ Socket error from client:', error);
     });
 });
 
-server.listen(port, () => {
+// ✅ Start server
+server.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Server is running on port ${port}`);
+    console.log(`✅ Health check: http://localhost:${port}/health`);
 });
