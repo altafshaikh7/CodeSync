@@ -22,21 +22,18 @@ const app = express();
 
 const passport = configurePassport();
 
-// ✅ PRODUCTION CORS - Fixed
+// ✅ CORS Configuration
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:4000',
     'http://localhost:5000',
     'https://codesync-frontendfrontend.onrender.com',
     'https://codesync-ne50.onrender.com',
-    process.env.FRONTEND_URL,
-].filter(Boolean);
+];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
-        
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -47,12 +44,19 @@ app.use(cors({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-    exposedHeaders: ['Content-Length', 'X-Requested-With'],
-    maxAge: 86400
 }));
 
-// ✅ REMOVE THIS LINE - it's causing the error
-// app.options('*', cors());
+// ✅ Express 5 Compatible OPTIONS handler
+app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') {
+        res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 app.use(cookieParser());
 app.use(morgan('dev'));
@@ -74,7 +78,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Health check
 app.get('/', (req, res) => {
     res.json({
         success: true,
@@ -91,14 +94,12 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Routes
 app.use('/users', userRoutes);
 app.use('/projects', projectRoutes);
 app.use('/ai', aiRoutes);
 app.use('/newsletter', newsletterRoutes);
 app.use('/auth', authRoutes);
 
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -106,7 +107,6 @@ app.use((req, res) => {
     });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
     console.error('❌ Server Error:', err.message);
     res.status(err.status || 500).json({
