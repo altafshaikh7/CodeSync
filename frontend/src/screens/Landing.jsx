@@ -38,7 +38,7 @@ const Landing = () => {
             bg: 'bg-blue-500/[0.08] border-blue-500/20 hover:border-blue-500/40 hover:shadow-blue-500/10',
             iconBg: 'bg-blue-500/10',
             title: 'AI-Powered Coding',
-            desc: 'Ask Gemini to generate full file trees, write boilerplate, or debug your code — all from the chat panel.'
+            desc: 'Ask CodeSync to generate full file trees, write boilerplate, or debug your code — all from the chat panel.'
         },
         {
             icon: 'ri-team-line',
@@ -96,7 +96,7 @@ const Landing = () => {
         {
             number: '03',
             title: 'Code with AI',
-            desc: 'Use Gemini AI to scaffold, debug, and ship faster.'
+            desc: 'Use CodeSync AI to scaffold, debug, and ship faster.'
         }
     ], [])
 
@@ -147,7 +147,7 @@ const Landing = () => {
         {
             number: '01',
             title: 'AI Pair Programming',
-            desc: 'Gemini helps write, explain, and debug code with you in real time.'
+            desc: 'CodeSync AI helps write, explain, and debug code with you in real time.'
         },
         {
             number: '02',
@@ -189,7 +189,7 @@ const Landing = () => {
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
                             <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
                         </span>
-                        <span>Powered by Google Gemini AI</span>
+                        <span>Powered by CodeSync</span>
                     </div>
 
                     {/* Headline */}
@@ -214,7 +214,7 @@ const Landing = () => {
                     {/* Description */}
                     <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg lg:text-xl">
                         CodeSync is a collaborative coding platform where your
-                        team and Gemini AI work in the same room — with a
+                        team and CodeSync AI work in the same room — with a
                         real-time editor, in-browser terminal, and persistent
                         project chat.
                     </p>
@@ -351,7 +351,7 @@ const Landing = () => {
                                         </p>
                                         <span className="inline-flex items-center gap-1 text-[10px] text-blue-400">
                                             <i className="ri-sparkling-line"></i>
-                                            Gemini AI
+                                            CodeSync 
                                         </span>
                                     </div>
 
@@ -383,7 +383,7 @@ const Landing = () => {
 
                                         <div className="flex items-center gap-2 pl-9 text-xs text-slate-500">
                                             <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400"></span>
-                                            Gemini AI is ready to help
+                                            CodeSync is ready to help
                                         </div>
                                     </div>
                                 </div>
