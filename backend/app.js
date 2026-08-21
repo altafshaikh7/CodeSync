@@ -22,7 +22,7 @@ const app = express();
 
 const passport = configurePassport();
 
-// ✅ PRODUCTION CORS
+// ✅ PRODUCTION CORS - Fixed
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:4000',
@@ -34,7 +34,9 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
+        
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -45,10 +47,12 @@ app.use(cors({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Length', 'X-Requested-With'],
     maxAge: 86400
 }));
 
-app.options('*', cors());
+// ✅ REMOVE THIS LINE - it's causing the error
+// app.options('*', cors());
 
 app.use(cookieParser());
 app.use(morgan('dev'));
@@ -70,7 +74,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ✅ Health check
+// Health check
 app.get('/', (req, res) => {
     res.json({
         success: true,
@@ -87,7 +91,7 @@ app.get('/health', (req, res) => {
     });
 });
 
-// ✅ Routes
+// Routes
 app.use('/users', userRoutes);
 app.use('/projects', projectRoutes);
 app.use('/ai', aiRoutes);
@@ -102,7 +106,7 @@ app.use((req, res) => {
     });
 });
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
     console.error('❌ Server Error:', err.message);
     res.status(err.status || 500).json({
