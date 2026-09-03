@@ -22,7 +22,7 @@ export const authUser = async (req, res, next) => {
 
         // ✅ Check if token is blacklisted (Redis)
         try {
-            const isBlackListed = await redisClient.get(token);
+            const isBlackListed = redisClient && await redisClient.get(token);
             if (isBlackListed) {
                 res.clearCookie('token');
                 return res.status(401).json({ 

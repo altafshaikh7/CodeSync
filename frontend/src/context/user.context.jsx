@@ -1,4 +1,11 @@
-import { createContext, useState, useEffect, useCallback } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import {
+    createContext,
+    useState,
+    useEffect,
+    useCallback,
+    useContext
+} from 'react';
 import axios from '../config/axios';
 
 export const UserContext = createContext();
@@ -8,7 +15,7 @@ export const UserProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Load user profile via cookie-based session
+    // The server validates the HttpOnly cookie; JavaScript never reads it.
     const loadUser = useCallback(async () => {
         try {
             const res = await axios.get('/users/profile');
@@ -20,9 +27,15 @@ export const UserProvider = ({ children }) => {
                 throw new Error('No user data received');
             }
         } catch (error) {
-            console.error('Failed to load user session:', error);
+            if (error.response?.status !== 401) {
+                console.error('Failed to load user session:', error);
+            }
             setUser(null);
-            setError(error.response?.data?.message || error.message || 'Failed to load user');
+            setError(
+                error.response?.status === 401
+                    ? null
+                    : error.response?.data?.message || error.message || 'Failed to load user'
+            );
         } finally {
             setLoading(false);
         }
@@ -37,7 +50,6 @@ export const UserProvider = ({ children }) => {
         } finally {
             setUser(null);
             setError(null);
-            window.location.href = '/login';
         }
     }, []);
 
@@ -56,7 +68,11 @@ export const UserProvider = ({ children }) => {
 
     // Load user on mount
     useEffect(() => {
-        loadUser();
+        const timer = setTimeout(() => {
+            void loadUser();
+        }, 0);
+
+        return () => clearTimeout(timer);
     }, [loadUser]);
 
     // Refresh user data

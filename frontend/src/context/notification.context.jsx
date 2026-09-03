@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import axios from '../config/axios';
 import { UserContext } from './user.context';
@@ -10,7 +11,7 @@ export const NotificationProvider = ({ children }) => {
     const [pendingInvites, setPendingInvites] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [notificationCount, setNotificationCount] = useState(0);
+    const notificationCount = pendingInvites.length;
     const intervalRef = useRef(null);
     const isMounted = useRef(true);
 
@@ -18,7 +19,6 @@ export const NotificationProvider = ({ children }) => {
     const clearPendingInvites = useCallback(() => {
         if (isMounted.current) {
             setPendingInvites([]);
-            setNotificationCount(0);
         }
     }, []);
 
@@ -42,7 +42,6 @@ export const NotificationProvider = ({ children }) => {
             if (isMounted.current) {
                 const invites = res.data.invites || [];
                 setPendingInvites(invites);
-                setNotificationCount(invites.length);
                 setError(null);
             }
         } catch (err) {
@@ -74,7 +73,6 @@ export const NotificationProvider = ({ children }) => {
             // Remove invite from list
             setPendingInvites(prev => {
                 const updated = prev.filter(inv => inv.projectId !== projectId);
-                setNotificationCount(updated.length);
                 return updated;
             });
 
@@ -100,12 +98,11 @@ export const NotificationProvider = ({ children }) => {
 
     // Decline invite
     const declineInvite = useCallback((projectId) => {
-        return respondInvite(projectId, 'decline');
+        return respondInvite(projectId, 'reject');
     }, [respondInvite]);
 
     // Mark all as read
     const markAllAsRead = useCallback(() => {
-        setNotificationCount(0);
         // Optional: API call to mark all as read
         // await axios.put('/projects/invites/mark-read');
     }, []);
@@ -122,6 +119,8 @@ export const NotificationProvider = ({ children }) => {
 
     // Setup auto-refresh interval
     useEffect(() => {
+        isMounted.current = true;
+
         if (!user) {
             clearPendingInvites();
             if (intervalRef.current) {
@@ -132,7 +131,9 @@ export const NotificationProvider = ({ children }) => {
         }
 
         // Initial fetch
-        fetchInvites();
+        const fetchTimer = setTimeout(() => {
+            void fetchInvites();
+        }, 0);
 
         // Set up interval for auto-refresh (every 30 seconds)
         if (intervalRef.current) {
@@ -143,6 +144,7 @@ export const NotificationProvider = ({ children }) => {
         // Cleanup on unmount or user change
         return () => {
             isMounted.current = false;
+            clearTimeout(fetchTimer);
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
@@ -171,11 +173,6 @@ export const NotificationProvider = ({ children }) => {
             window.removeEventListener('offline', handleOffline);
         };
     }, [user, fetchInvites]);
-
-    // Update notification count when pending invites change
-    useEffect(() => {
-        setNotificationCount(pendingInvites.length);
-    }, [pendingInvites]);
 
     const value = {
         // State

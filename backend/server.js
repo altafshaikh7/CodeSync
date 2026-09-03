@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import projectModel from './models/project.model.js';
+import { allowedOrigins } from './config/cors.js';
 
 const port = process.env.PORT || 5000;
 
@@ -14,12 +15,7 @@ const server = http.createServer(app);
 // ✅ CORS for Socket.io
 const io = new Server(server, {
     cors: {
-        origin: [
-            'http://localhost:5173',
-            'http://localhost:4000',
-            'https://codesync-frontendfrontend.onrender.com',
-            'https://codesync-ne50.onrender.com'
-        ],
+        origin: allowedOrigins,
         methods: ['GET', 'POST'],
         credentials: true,
         allowedHeaders: ['Content-Type', 'Authorization']
@@ -31,8 +27,12 @@ const io = new Server(server, {
 
 io.use(async (socket, next) => {
     try {
-        const token = socket.handshake.auth?.token ||
-            socket.handshake.headers.authorization?.split(' ')[1];
+        const cookieHeader = socket.handshake.headers.cookie || '';
+        const token = cookieHeader
+            .split(';')
+            .map(cookie => cookie.trim())
+            .find(cookie => cookie.startsWith('token='))
+            ?.slice('token='.length);
 
         const projectId = socket.handshake.query.projectId;
 

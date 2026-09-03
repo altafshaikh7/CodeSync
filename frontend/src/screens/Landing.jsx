@@ -10,9 +10,7 @@ const Landing = () => {
 
     // Redirect logged-in users to home
     useEffect(() => {
-        const token = localStorage.getItem('token')
-
-        if (token && user) {
+        if (user) {
             navigate('/home', { replace: true })
         }
     }, [user, navigate])

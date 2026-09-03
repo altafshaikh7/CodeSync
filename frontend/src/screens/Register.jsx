@@ -1,10 +1,8 @@
 import { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserContext } from '../context/user.context'
-import axios from 'axios'
+import axios from '../config/axios'
 import { toast } from 'react-toastify'
-
-const API_URL = 'http://localhost:5000'
 
 const Register = () => {
     const [name, setName] = useState('')
@@ -71,7 +69,7 @@ const Register = () => {
         try {
             setIsLoading(true)
 
-            const res = await axios.post(`${API_URL}/users/register`, {
+            const res = await axios.post('/users/register', {
                 name: name.trim(),
                 email: email.toLowerCase().trim(),
                 password: password
@@ -80,12 +78,6 @@ const Register = () => {
             console.log('Response:', res.data)
 
             toast.success(res.data.message || 'OTP sent to your email')
-            
-            // Auto-fill OTP for testing
-            if (res.data.debugOtp) {
-                setOtp(res.data.debugOtp)
-                toast.info(`OTP: ${res.data.debugOtp}`)
-            }
             
             setStep('otp')
             setResendCooldown(60)
@@ -107,14 +99,13 @@ const Register = () => {
         try {
             setIsLoading(true)
 
-            const res = await axios.post(`${API_URL}/users/verify-signup`, {
+            const res = await axios.post('/users/verify-signup', {
                 email: email.toLowerCase().trim(),
                 otp
             })
 
             toast.success('Email verified! Welcome 🎉')
 
-            localStorage.setItem('token', res.data.token)
             setUser(res.data.user)
             navigate('/home')
         } catch (err) {
@@ -130,18 +121,13 @@ const Register = () => {
         try {
             setIsLoading(true)
 
-            const res = await axios.post(`${API_URL}/users/register`, {
+            const res = await axios.post('/users/register', {
                 name: name.trim(),
                 email: email.toLowerCase().trim(),
                 password: password
             })
 
             toast.success(res.data.message || 'OTP resent to your email')
-            
-            if (res.data.debugOtp) {
-                setOtp(res.data.debugOtp)
-                toast.info(`OTP: ${res.data.debugOtp}`)
-            }
             
             setResendCooldown(60)
         } catch (err) {

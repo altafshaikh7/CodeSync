@@ -7,6 +7,7 @@ import { generateOTP, storeOTP, verifyOTP } from '../services/otp.service.js';
 import { sendOTP } from '../services/email.service.js';
 import bcrypt from 'bcrypt'
 import { Resend } from 'resend'
+import { authCookieOptions } from '../config/auth.js'
 
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -45,17 +46,10 @@ export const createUserController = async (req, res) => {
     const otp = generateOTP()
     await storeOTP(`signup:${email}`, otp)
     
-    // TEMPORARY FIX: Email send skip karein
-    // await sendOTP(email, otp)
-    
-    console.log('========================================')
-    console.log('SIGNUP OTP for testing:', otp)
-    console.log('Email:', email)
-    console.log('========================================')
+    await sendOTP(email, otp)
 
     res.status(200).json({ 
-      message: 'OTP sent to your email',
-      debugOtp: otp  // Testing ke liye OTP frontend ko bhej rahe hain
+      message: 'OTP sent to your email'
     })
 
   } catch (error) {
@@ -86,7 +80,7 @@ export const verifySignupOTPController = async (req, res) => {
     const token = await user.generateJWT()
     delete user._doc.password
 
-    res.status(200).json({ user, token })
+    res.cookie('token', token, authCookieOptions).status(200).json({ user })
 
   } catch (error) {
     console.error('Verify OTP error:', error)
@@ -127,17 +121,10 @@ export const loginController = async (req, res) => {
     const otp = generateOTP()
     await storeOTP(`login:${email}`, otp)
     
-    // TEMPORARY FIX: Email send skip karein
-    // await sendOTP(email, otp)
-    
-    console.log('========================================')
-    console.log('LOGIN OTP for testing:', otp)
-    console.log('Email:', email)
-    console.log('========================================')
+    await sendOTP(email, otp)
 
     res.status(200).json({ 
-      message: 'OTP sent to your email',
-      debugOtp: otp  // Testing ke liye OTP frontend ko bhej rahe hain
+      message: 'OTP sent to your email'
     })
 
   } catch (error) {
@@ -160,7 +147,7 @@ export const verifyLoginOTPController = async (req, res) => {
     const token = await user.generateJWT()
     delete user._doc.password
 
-    res.status(200).json({ user, token })
+    res.cookie('token', token, authCookieOptions).status(200).json({ user })
 
   } catch (error) {
     console.error('Verify login OTP error:', error)
@@ -179,9 +166,13 @@ export const profileController = async (req, res) => {
 
 export const logoutController = async (req, res) => {
   try {
-    const token = req.cookies.token || req.headers.authorization.split(' ')[1];
+    const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
 
-    redisClient.set(token, 'logout', 'EX', 60 * 60 * 24);
+    if (redisClient && token) {
+      await redisClient.set(token, 'logout', 'EX', 60 * 60 * 24);
+    }
+
+    res.clearCookie('token', authCookieOptions);
 
     res.status(200).json({
       message: 'Logged out successfully'

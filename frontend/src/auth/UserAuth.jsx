@@ -14,7 +14,7 @@ const UserAuth = ({ children }) => {
     }
 
     if (!user) {
-        return <Navigate to="/" replace />;
+        return <Navigate to="/login" replace />;
     }
 
     return children;

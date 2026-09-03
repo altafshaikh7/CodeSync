@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react'
-import { Route, BrowserRouter, Routes, useLocation } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
 
 const Login = React.lazy(() => import('../screens/Login'))
 const Register = React.lazy(() => import('../screens/Register'))
@@ -17,7 +17,6 @@ import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import ScrollToTop from '../components/ScrollToTop'
 import OfflineBanner from '../components/OfflineBanner'
-import { NotificationProvider } from '../context/notification.context'
 
 // Premium Loading Component
 const LoadingScreen = () => {
@@ -79,8 +78,7 @@ const AppLayout = () => {
 
     return (
         <>
-            <NotificationProvider>
-                {shouldShowNavbar && <Navbar />}
+            {shouldShowNavbar && <Navbar />}
 
                 <OfflineBanner />
 
@@ -147,19 +145,13 @@ const AppLayout = () => {
                         />
                     </Routes>
                 </Suspense>
-            </NotificationProvider>
-
             {shouldShowFooter && <Footer />}
         </>
     )
 }
 
 const AppRoutes = () => {
-    return (
-        <BrowserRouter>
-            <AppLayout />
-        </BrowserRouter>
-    )
+    return <AppLayout />
 }
 
 export default AppRoutes

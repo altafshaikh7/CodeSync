@@ -43,14 +43,15 @@ const Login = () => {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
 
-    function submitHandler(e) {
+    async function submitHandler(e) {
         e.preventDefault();
-        
-        if (!validateEmail(email)) {
+
+        const normalizedEmail = email.trim().toLowerCase();
+        if (!validateEmail(normalizedEmail)) {
             toast.error('Please enter a valid email address');
             return;
         }
-        
+
         if (password.length < 6) {
             toast.error('Password must be at least 6 characters');
             return;
@@ -58,83 +59,67 @@ const Login = () => {
 
         setIsLoading(true);
 
-        // ✅ Correct relative endpoint mapping to backend /users/login
-        axios.post('/users/login', {
-            email,
-            password
-        }).then((res) => {
+        try {
+            const res = await axios.post('/users/login', {
+                email: normalizedEmail,
+                password
+            });
             toast.success(res.data.message || "OTP sent to your email");
-            
-            if (res.data.debugOtp) {
-                setOtp(res.data.debugOtp);
-                toast.info(`OTP: ${res.data.debugOtp}`);
-            }
-            
             setStep('otp');
             setResendCooldown(30);
-        })
-        .catch((err) => {
+        } catch (err) {
             console.error('Login error:', err);
-            if (err.response?.status === 404) {
-                toast.error('Server endpoint not found. Please check backend routes.');
-            } else {
-                showApiError(err, "Login failed");
-            }
-        })
-        .finally(() => {
+            showApiError(err, 'Login failed');
+        } finally {
             setIsLoading(false);
-        });
+        }
     }
 
-    function verifyOtpHandler(e) {
+    async function verifyOtpHandler(e) {
         e.preventDefault();
 
-        if (otp.length !== 6) {
+        const normalizedOtp = otp.trim();
+        if (!/^\d{6}$/.test(normalizedOtp)) {
             toast.error('Please enter a valid 6-digit OTP');
             return;
         }
 
         setIsLoading(true);
 
-        // ✅ Correct endpoint matching backend: /users/verify-login-otp
-        axios.post('/users/verify-login-otp', {
-            email, 
-            otp
-        }).then((res) => {
+        try {
+            const res = await axios.post('/users/verify-login', {
+                email: email.trim().toLowerCase(),
+                otp: normalizedOtp
+            });
             toast.success("Logged in successfully");
             setUser(res.data.user);
             navigate('/home');
-        }).catch((err) => {
+        } catch (err) {
             console.error('Verify OTP error:', err);
             showApiError(err, "Invalid OTP");
-        }).finally(() => {
+        } finally {
             setIsLoading(false);
-        });
+        }
     }
 
-    function resendOtpHandler() {
+    async function resendOtpHandler() {
         if (resendCooldown > 0 || isResending) return;
-        
+
         setIsResending(true);
 
-        axios.post('/users/login', {
-            email, 
-            password
-        }).then((res) => {
+        try {
+            const res = await axios.post('/users/login', {
+                email: email.trim().toLowerCase(),
+                password
+            });
             toast.success(res.data.message || "OTP resent to your email");
-            
-            if (res.data.debugOtp) {
-                setOtp(res.data.debugOtp);
-                toast.info(`OTP: ${res.data.debugOtp}`);
-            }
-            
             setResendCooldown(30);
-        }).catch((err) => {
+        } catch (err) {
             console.error('Resend error:', err);
             showApiError(err, "Failed to resend OTP");
-        }).finally(() => {
+        } finally {
             setIsResending(false);
-        });
+        }
     }
 
     const handleBackToLogin = useCallback(() => {

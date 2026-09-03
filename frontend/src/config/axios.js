@@ -12,20 +12,6 @@ const axiosInstance = axios.create({
     timeout: 30000, // ✅ 30 second timeout
 });
 
-// Request interceptor
-axiosInstance.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
-
 // Response interceptor
 axiosInstance.interceptors.response.use(
     (response) => response,
@@ -35,7 +21,7 @@ axiosInstance.interceptors.response.use(
             localStorage.removeItem('token');
             // ✅ Don't redirect if already on login/register
             const publicPaths = ['/login', '/register', '/forgot-password', '/'];
-            if (!publicPaths.some(path => window.location.pathname.includes(path))) {
+            if (!publicPaths.includes(window.location.pathname)) {
                 window.location.href = '/login';
             }
         }

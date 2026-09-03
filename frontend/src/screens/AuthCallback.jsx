@@ -14,7 +14,6 @@ const AuthCallback = () => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        const token = searchParams.get('token');
         const errorParam = searchParams.get('error');
         const message = searchParams.get('message');
 
@@ -22,35 +21,20 @@ const AuthCallback = () => {
         if (errorParam) {
             const errorMessage = message || errorParam;
             toast.error(`Authentication failed: ${errorMessage}`);
-            setError(errorMessage);
-            setLoading(false);
+            setTimeout(() => {
+                setError(errorMessage);
+                setLoading(false);
+            }, 0);
             setTimeout(() => {
                 navigate('/login?error=' + encodeURIComponent(errorParam));
             }, 500);
             return;
         }
 
-        // Check if token exists
-        if (!token) {
-            toast.error('No authentication token received');
-            setError('No authentication token received');
-            setLoading(false);
-            setTimeout(() => {
-                navigate('/login');
-            }, 500);
-            return;
-        }
-
-        // Store token and get user profile
+        // The backend sets the HttpOnly cookie before redirecting here.
         const authenticateUser = async () => {
             try {
                 setStatusMessage('Verifying credentials...');
-                
-                // Store token in localStorage
-                localStorage.setItem('token', token);
-                
-                // Set token in axios default headers
-                axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 
                 setStatusMessage('Loading your profile...');
                 
@@ -70,9 +54,6 @@ const AuthCallback = () => {
                 }
             } catch (err) {
                 console.error('Auth callback error:', err);
-                localStorage.removeItem('token');
-                delete axios.defaults.headers.common['Authorization'];
-                
                 const errorMsg = err.response?.data?.message || err.message || 'Authentication failed';
                 toast.error(errorMsg);
                 setError(errorMsg);

@@ -15,6 +15,7 @@ import newsletterRoutes from './routes/newsletter.routes.js';
 import authRoutes from './routes/auth.routes.js';
 
 import configurePassport from './config/passport.js';
+import { allowedOrigins } from './config/cors.js';
 
 connect();
 
@@ -23,13 +24,6 @@ const app = express();
 const passport = configurePassport();
 
 // ✅ CORS Configuration (Sirf Frontend URLs allowed hone chahiye)
-const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:4000',
-    'http://localhost:5000',
-    'https://codesync-frontendfrontend.onrender.com', // Aapka frontend URL
-];
-
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);

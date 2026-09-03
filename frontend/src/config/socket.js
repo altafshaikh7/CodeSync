@@ -20,14 +20,7 @@ export const initializeSocket = (projectId) => {
     }
 
     isConnecting = true;
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-        console.error('❌ No token found for socket connection');
-        isConnecting = false;
-        return null;
-    }
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://codesync-ne50.onrender.com';
 
     if (!projectId) {
         console.error('❌ No projectId found for socket connection');
@@ -39,7 +32,7 @@ export const initializeSocket = (projectId) => {
         console.log('🔌 Initializing socket with projectId:', projectId);
         
         socketInstance = io(apiUrl, {
-            auth: { token },
+            withCredentials: true,
             query: { projectId },
             transports: ['websocket', 'polling'],
             reconnection: true,
@@ -63,11 +56,7 @@ export const initializeSocket = (projectId) => {
                 error.message === 'User not authorized for this project') {
                 console.log('🔄 Authentication failed, will retry...');
                 setTimeout(() => {
-                    const freshToken = localStorage.getItem('token');
-                    if (freshToken && socketInstance) {
-                        socketInstance.auth = { token: freshToken };
-                        socketInstance.connect();
-                    }
+                    if (socketInstance) socketInstance.connect();
                 }, 3000);
             }
         });
