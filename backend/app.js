@@ -15,7 +15,7 @@ import newsletterRoutes from './routes/newsletter.routes.js';
 import authRoutes from './routes/auth.routes.js';
 
 import configurePassport from './config/passport.js';
-import { allowedOrigins } from './config/cors.js';
+import { corsOptions } from './config/cors.js';
 
 connect();
 
@@ -23,23 +23,8 @@ const app = express();
 
 const passport = configurePassport();
 
-// ✅ CORS Configuration (Sirf Frontend URLs allowed hone chahiye)
-app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            console.log('❌ CORS blocked origin:', origin);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-}));
-
-// (Custom OPTIONS middleware yahan se hata diya gaya hai kyunki cors() package ise automatically handle karta hai)
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(cookieParser());
 app.use(morgan('dev'));
