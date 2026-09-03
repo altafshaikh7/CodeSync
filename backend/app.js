@@ -22,13 +22,12 @@ const app = express();
 
 const passport = configurePassport();
 
-// ✅ CORS Configuration
+// ✅ CORS Configuration (Sirf Frontend URLs allowed hone chahiye)
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:4000',
     'http://localhost:5000',
-    'https://codesync-frontendfrontend.onrender.com',
-    'https://codesync-ne50.onrender.com',
+    'https://codesync-frontendfrontend.onrender.com', // Aapka frontend URL
 ];
 
 app.use(cors({
@@ -46,17 +45,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 }));
 
-// ✅ Express 5 Compatible OPTIONS handler
-app.use((req, res, next) => {
-    if (req.method === 'OPTIONS') {
-        res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-        return res.sendStatus(200);
-    }
-    next();
-});
+// (Custom OPTIONS middleware yahan se hata diya gaya hai kyunki cors() package ise automatically handle karta hai)
 
 app.use(cookieParser());
 app.use(morgan('dev'));
