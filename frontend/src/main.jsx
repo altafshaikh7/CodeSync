@@ -26,12 +26,13 @@ const root = createRoot(rootElement);
 
 root.render(
     <StrictMode>
-        {/* Remove BrowserRouter from here if it's already in AppRoutes */}
-        <UserProvider>
-            <NotificationProvider>
-                <App />
-            </NotificationProvider>
-        </UserProvider>
+        <BrowserRouter>
+            <UserProvider>
+                <NotificationProvider>
+                    <App />
+                </NotificationProvider>
+            </UserProvider>
+        </BrowserRouter>
     </StrictMode>
 );
 

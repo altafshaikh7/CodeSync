@@ -4,9 +4,6 @@ import axios from '../config/axios.js';
 import { UserContext } from '../context/user.context.jsx';
 import { toast } from 'react-toastify';
 
-// Fix: Add fallback URL
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -19,9 +16,6 @@ const Login = () => {
 
     const { setUser } = useContext(UserContext);
     const navigate = useNavigate();
-
-    // Log API URL for debugging
-    console.log('API URL:', apiUrl);
 
     useEffect(() => {
         if (resendCooldown <= 0) return;
@@ -64,11 +58,8 @@ const Login = () => {
 
         setIsLoading(true);
 
-        // Fix: Log the full URL being called
-        const loginUrl = `${apiUrl}/users/login`;
-        console.log('Calling:', loginUrl);
-
-        axios.post(loginUrl, {
+        // ✅ Correct relative endpoint mapping to backend /users/login
+        axios.post('/users/login', {
             email,
             password
         }).then((res) => {
@@ -85,7 +76,7 @@ const Login = () => {
         .catch((err) => {
             console.error('Login error:', err);
             if (err.response?.status === 404) {
-                toast.error('Server not found. Please check if backend is running.');
+                toast.error('Server endpoint not found. Please check backend routes.');
             } else {
                 showApiError(err, "Login failed");
             }
@@ -105,12 +96,12 @@ const Login = () => {
 
         setIsLoading(true);
 
-        axios.post(`${apiUrl}/users/verify-login`, {
+        // ✅ Correct endpoint matching backend: /users/verify-login-otp
+        axios.post('/users/verify-login-otp', {
             email, 
             otp
         }).then((res) => {
             toast.success("Logged in successfully");
-            localStorage.setItem('token', res.data.token);
             setUser(res.data.user);
             navigate('/home');
         }).catch((err) => {
@@ -126,7 +117,7 @@ const Login = () => {
         
         setIsResending(true);
 
-        axios.post(`${apiUrl}/users/login`, {
+        axios.post('/users/login', {
             email, 
             password
         }).then((res) => {
@@ -150,6 +141,8 @@ const Login = () => {
         setStep('login');
         setOtp('');
     }, []);
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://codesync-ne50.onrender.com';
 
     return (
         <div className="relative min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4 py-10 overflow-hidden">

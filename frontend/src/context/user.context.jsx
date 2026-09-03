@@ -8,20 +8,9 @@ export const UserProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Load user from token
+    // Load user profile via cookie-based session
     const loadUser = useCallback(async () => {
-        const token = localStorage.getItem('token');
-
-        if (!token) {
-            setLoading(false);
-            setUser(null);
-            return;
-        }
-
         try {
-            // Set token in axios headers
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            
             const res = await axios.get('/users/profile');
             
             if (res.data?.user) {
@@ -31,12 +20,7 @@ export const UserProvider = ({ children }) => {
                 throw new Error('No user data received');
             }
         } catch (error) {
-            console.error('Failed to load user:', error);
-            
-            // Clear invalid token
-            localStorage.removeItem('token');
-            delete axios.defaults.headers.common['Authorization'];
-            
+            console.error('Failed to load user session:', error);
             setUser(null);
             setError(error.response?.data?.message || error.message || 'Failed to load user');
         } finally {
@@ -47,20 +31,17 @@ export const UserProvider = ({ children }) => {
     // Logout user
     const logout = useCallback(async () => {
         try {
-            // Optional: Call logout API
             await axios.post('/users/logout');
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
-            // Clear local storage and state
-            localStorage.removeItem('token');
-            delete axios.defaults.headers.common['Authorization'];
             setUser(null);
             setError(null);
+            window.location.href = '/login';
         }
     }, []);
 
-    // Update user
+    // Update user state locally
     const updateUser = useCallback((updatedUser) => {
         setUser(prev => ({
             ...prev,
@@ -70,7 +51,7 @@ export const UserProvider = ({ children }) => {
 
     // Check if user is authenticated
     const isAuthenticated = useCallback(() => {
-        return !!user && !!localStorage.getItem('token');
+        return !!user;
     }, [user]);
 
     // Load user on mount
