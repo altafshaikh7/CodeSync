@@ -1,28 +1,52 @@
-import Redis from "ioredis";
+const store = new Map();
 
-const redisUrl = process.env.REDIS_URL;
-const redisHost = process.env.REDIS_HOST;
+const removeExpiredEntries = () => {
+  const now = Date.now();
 
-const redisClient = redisUrl
-  ? new Redis(redisUrl)
-  : redisHost
-    ? new Redis({
-        host: redisHost,
-        port: Number(process.env.REDIS_PORT || 6379),
-        password: process.env.REDIS_PASSWORD || undefined,
-      })
-    : null;
+  for (const [key, entry] of store) {
+    if (entry.expiresAt !== null && entry.expiresAt <= now) {
+      store.delete(key);
+    }
+  }
+};
 
-if (redisClient) {
-  redisClient.on("connect", () => {
-    console.log("Redis connected");
-  });
+const cleanupInterval = setInterval(removeExpiredEntries, 60 * 1000);
+cleanupInterval.unref?.();
 
-  redisClient.on("error", (err) => {
-    console.log("Redis error:", err.message);
-  });
-} else {
-  console.log("Redis not configured - continuing without Redis");
-}
+const memoryStore = {
+  async set(key, value, mode, ttlSeconds) {
+    let expiresAt = null;
 
-export default redisClient;
+    if (mode === 'EX') {
+      const ttl = Number(ttlSeconds);
+      if (!Number.isFinite(ttl) || ttl <= 0) {
+        throw new Error('Expiration must be a positive number of seconds');
+      }
+      expiresAt = Date.now() + ttl * 1000;
+    }
+
+    store.set(String(key), { value, expiresAt });
+    return 'OK';
+  },
+
+  async get(key) {
+    const normalizedKey = String(key);
+    const entry = store.get(normalizedKey);
+
+    if (!entry) return null;
+    if (entry.expiresAt !== null && entry.expiresAt <= Date.now()) {
+      store.delete(normalizedKey);
+      return null;
+    }
+
+    return entry.value;
+  },
+
+  async del(key) {
+    return store.delete(String(key)) ? 1 : 0;
+  }
+};
+
+console.log('Using in-memory store; Redis is disabled');
+
+export default memoryStore;
